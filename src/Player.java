@@ -37,6 +37,7 @@ class Boomer {
     static final int ENTITY_TYPE = 0;
     int id;
     Position position = new Position(0, 0);
+    int maxBombsAvailable = 1;
     int bombsAvailable;
     int explosionRange;
 
@@ -67,6 +68,7 @@ class Item {
         ExtraBomb(2);
 
         int code;
+
         Type(int code) {
             this.code = code;
         }
@@ -81,7 +83,9 @@ class Cell {
         Floor('.'),
         Box('0'),
         BoxWithExtraRange('1'),
-        BoxWithExtraBomb('2');
+        BoxWithExtraBomb('2'),
+        ExtraRange('R'),
+        ExtraBomb('B');
 
         char symbol;
 
@@ -90,7 +94,8 @@ class Cell {
         }
     }
 
-    static EnumSet<Type> COUNTABLE_OBJECTS = EnumSet.of(Type.Box, Type.BoxWithExtraBomb, Type.BoxWithExtraRange);
+    static EnumSet<Type> BOX_SUBTYPES = EnumSet.of(Type.Box, Type.BoxWithExtraBomb, Type.BoxWithExtraRange);
+    static EnumSet<Type> BONUS_SUBTYPES = EnumSet.of(Type.ExtraRange, Type.ExtraBomb);
 
     Position position;
     Type type = Type.Floor;
@@ -158,9 +163,14 @@ class Grid {
 }
 
 class Target {
+    enum Type {
+        BombPlace,
+        Bonus
+    }
     Position position;
     int distance;
     int utility;
+    Type type;
 
     @Override
     public String toString() {
@@ -192,7 +202,6 @@ class Player {
 
     void run() {
         // game loop
-        boolean firstTurn = true;
         while (true) {
             updateWorldState();
             in.nextLine();
@@ -217,22 +226,34 @@ class Player {
 //            System.err.println(world.enemyBomb);
             System.err.println(world.target);
 
-            if (world.enemyBomb != null && world.enemyBomb.timer == Bomb.COUNTDOWN) {
-                // then enemy just have placed the bomb, old target is not actual now
-                world.target = null;
+            int scanRange = Bomb.COUNTDOWN;
+            if (world.player.bombsAvailable > 0) {
+                scanRange = 4;
+            }
+            world.target = findNearestCellWithHighestUtility(scanRange, exceptions);
+            if (world.target == null) {
+                scanRange *= 2;
+                world.target = findNearestCellWithHighestUtility(scanRange, exceptions);
+            }
+            if (world.target == null) {
+                scanRange *= 2;
+                world.target = findNearestCellWithHighestUtility(scanRange, exceptions);
+            }
+            if (world.target == null) {
+                world.target = new Target();
+                world.target.position = new Position(0, 0);
             }
 
-            if (world.target == null) {
-                world.target = findNearestCellWithHighestUtility(firstTurn ? 4 : Bomb.COUNTDOWN + 1, exceptions);
-            }
             if (world.target.position.equals((world.player.position))) {
-                System.out.println("BOMB " + world.target.position.x + " " + world.target.position.y);
+                if (world.target.type == Target.Type.BombPlace) {
+                    System.out.println("BOMB " + world.target.position.x + " " + world.target.position.y);
+                } else {
+                    System.out.println("MOVE " + world.target.position.x + " " + world.target.position.y);
+                }
                 world.target = null;
             } else {
                 System.out.println("MOVE " + world.target.position.x + " " + world.target.position.y);
             }
-
-            firstTurn = false;
         }
     }
 
@@ -298,8 +319,10 @@ class Player {
                     item.position.y = y;
                     if (param1 == Item.Type.ExtraRange.code) {
                         item.type = Item.Type.ExtraRange;
+                        world.grid.cells[x][y].type = Cell.Type.ExtraRange;
                     } else if (param1 == Item.Type.ExtraBomb.code) {
                         item.type = Item.Type.ExtraBomb;
+                        world.grid.cells[x][y].type = Cell.Type.ExtraBomb;
                     }
                     world.items.put(item.position, item);
                     break;
@@ -316,12 +339,19 @@ class Player {
         for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
             for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
                 final Cell cell = world.grid.cells[columnIndex][rowIndex];
-                if (cell.type != Cell.Type.Floor) {
-                    // TODO: process non floor cells
-                    continue;
+                if (cell.type == Cell.Type.Floor) {
+                    final Set<Cell> boxes = getBoxesAffectedByExplosion(new Position(columnIndex, rowIndex), bombRange, exceptions);
+                    cell.utility = boxes.size();
+                } else if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
+                    final int distanceToBonus = calculateDistance(world.player.position, cell.position);
+                    cell.utility = (distanceToBonus <= 2) ? 5 : 0;
+                    if (cell.type == Cell.Type.ExtraRange && world.player.explosionRange > 4) {
+                        cell.utility = 0;
+                    }
+                    if (cell.type == Cell.Type.ExtraBomb && world.player.maxBombsAvailable > 2) {
+                        cell.utility = 0;
+                    }
                 }
-                final Set<Cell> boxes = getBoxesAffectedByExplosion(new Position(columnIndex, rowIndex), bombRange, exceptions);
-                cell.utility = boxes.size();
             }
         }
     }
@@ -336,7 +366,7 @@ class Player {
         final Set<Cell> boxes = new HashSet<>(4);
         for (int explosionColumnIndex = bombPosition.x - 1; explosionColumnIndex >= explosionColumnLeft; --explosionColumnIndex) {
             final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
-            if (Cell.COUNTABLE_OBJECTS.contains(cell.type)) {
+            if (Cell.BOX_SUBTYPES.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
                 }
@@ -345,7 +375,7 @@ class Player {
         }
         for (int explosionColumnIndex = bombPosition.x + 1; explosionColumnIndex <= explosionColumnRight; ++explosionColumnIndex) {
             final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
-            if (Cell.COUNTABLE_OBJECTS.contains(cell.type)) {
+            if (Cell.BOX_SUBTYPES.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
                 }
@@ -354,7 +384,7 @@ class Player {
         }
         for (int explosionRowIndex = bombPosition.y - 1; explosionRowIndex >= explosionRowTop; --explosionRowIndex) {
             final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
-            if (Cell.COUNTABLE_OBJECTS.contains(cell.type)) {
+            if (Cell.BOX_SUBTYPES.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
                 }
@@ -363,7 +393,7 @@ class Player {
         }
         for (int explosionRowIndex = bombPosition.y + 1; explosionRowIndex <= explosionRowBottom; ++explosionRowIndex) {
             final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
-            if (Cell.COUNTABLE_OBJECTS.contains(cell.type)) {
+            if (Cell.BOX_SUBTYPES.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
                 }
@@ -409,6 +439,11 @@ class Player {
         target.position = positionOfMax;
         target.distance = distanceToMax;
         target.utility = max;
+        if (Cell.BONUS_SUBTYPES.contains(world.grid.cells[target.position.x][target.position.y].type)) {
+            target.type = Target.Type.Bonus;
+        } else {
+            target.type = Target.Type.BombPlace;
+        }
         return target;
     }
 
@@ -416,4 +451,13 @@ class Player {
         // manhattan distance without obstacles
         return Math.abs(x1 - x2) + Math.abs(y1 - y2);
     }
+
+    int calculateDistance(Position pos1, Position pos2) {
+        // manhattan distance without obstacles
+        return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
+    }
+
+//    double findCosBetweenVectors(Position origin, Position vec1, Position vec2) {
+//
+//    }
 }
