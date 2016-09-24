@@ -16,14 +16,15 @@ class Boomer {
 
 class Bomb {
     static final int ENTITY_TYPE = 1;
+    static final int COUNTDOWN = 8;
     int x;
     int y;
-    int roundsLeft;
+    int timer;
     int explosionRange;
 
     @Override
     public String toString() {
-        return "Bomb {" + x + "," + y + "," + roundsLeft + "," + explosionRange + "}";
+        return "Bomb {" + x + "," + y + "," + timer + "," + explosionRange + "}";
     }
 }
 
@@ -80,6 +81,21 @@ class Grid {
     }
 }
 
+class Position {
+    int x;
+    int y;
+
+    Position(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    @Override
+    public String toString() {
+        return "{" + x + "," + y + "}";
+    }
+}
+
 class World {
     Grid grid;
     Boomer player = new Boomer();
@@ -114,10 +130,9 @@ class Player {
             System.err.println(world.playerBomb);
             System.err.println(world.enemyBomb);
 
-            // Write an action using System.out.println()
-            // To debug: System.err.println("Debug messages...");
+            final Position target = findNearestCellWithHighestUtility(Bomb.COUNTDOWN + 1);
 
-            System.out.println("BOMB 6 5");
+            System.out.println("MOVE " + target.x + " " + target.y);
         }
     }
 
@@ -170,7 +185,7 @@ class Player {
                     }
                     bomb.x = x;
                     bomb.y = y;
-                    bomb.roundsLeft = param1;
+                    bomb.timer = param1;
                     bomb.explosionRange = param2;
                     break;
                 default:
@@ -222,5 +237,43 @@ class Player {
                 cell.utility = crashedBoxCount;
             }
         }
+    }
+
+    Position findNearestCellWithHighestUtility(int scanRange) {
+        final int width = world.grid.width;
+        final int height = world.grid.height;
+        final int playerX = world.player.x;
+        final int playerY = world.player.y;
+        final int columnDeltaMin = Math.max(-scanRange, 0 - playerX);
+        final int columnDeltaMax = Math.min(scanRange, width - 1 - playerX);
+        int distanceToMax = 0;
+        int maxX = 0;
+        int maxY = 0;
+        int max = 0;
+        for (int columnDelta = columnDeltaMin; columnDelta <= columnDeltaMax; ++columnDelta) {
+            final int columnIndex = playerX + columnDelta;
+            final int rowDeltaMin = Math.max(-scanRange + columnDelta, 0 - playerY);
+            final int rowDeltaMax = Math.min(scanRange - columnDelta, height - 1 - playerY);
+            for (int rowDelta = rowDeltaMin; rowDelta <= rowDeltaMax; ++rowDelta) {
+                final int rowIndex = playerY + rowDelta;
+                final int currentUtility = world.grid.cells[columnIndex][rowIndex].utility;
+                if (currentUtility < max) {
+                    continue;
+                }
+                final int currentDistance = calculateDistance(playerX, playerY, columnIndex, rowIndex);
+                if (currentUtility > max || (currentUtility == max && currentDistance < distanceToMax)) {
+                    maxX = columnIndex;
+                    maxY = rowIndex;
+                    max = currentUtility;
+                    distanceToMax = currentDistance;
+                }
+            }
+        }
+        return new Position(maxX, maxY);
+    }
+
+    int calculateDistance(int x1, int y1, int x2, int y2) {
+        // manhattan distance without obstacles
+        return Math.abs(x1 - x2) + Math.abs(y1 - y2);
     }
 }
