@@ -1,30 +1,63 @@
-import java.util.*;
+import java.util.HashSet;
+import java.util.Scanner;
+import java.util.Set;
+
+class Position {
+    int x;
+    int y;
+
+    Position(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    @Override
+    public String toString() {
+        return "{" + x + "," + y + "}";
+    }
+
+    @Override
+    public int hashCode() {
+        return 31 * x + y;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (!(obj instanceof Position)) {
+            return false;
+        }
+        final Position other = (Position) obj;
+        return x == other.x
+                && y == other.y;
+    }
+}
 
 class Boomer {
     static final int ENTITY_TYPE = 0;
     int id;
-    int x;
-    int y;
+    Position position = new Position(0, 0);
     int bombsAvailable;
     int explosionRange;
 
     @Override
     public String toString() {
-        return "Boomer {" + x + "," + y + "," + bombsAvailable + "," + explosionRange + "}";
+        return "Boomer {" + position + "," + bombsAvailable + "," + explosionRange + "}";
     }
 }
 
 class Bomb {
     static final int ENTITY_TYPE = 1;
     static final int COUNTDOWN = 8;
-    int x;
-    int y;
+    Position position = new Position(0, 0);
     int timer;
     int explosionRange;
 
     @Override
     public String toString() {
-        return "Bomb {" + x + "," + y + "," + timer + "," + explosionRange + "}";
+        return "Bomb {" + position + "," + timer + "," + explosionRange + "}";
     }
 }
 
@@ -40,8 +73,9 @@ class Cell {
         }
     }
 
+    Position position;
     Type type = Type.Floor;
-    int utility = 0;
+    int utility;
 
     @Override
     public String toString() {
@@ -78,39 +112,6 @@ class Grid {
             sb.append("\n");
         }
         return sb.toString();
-    }
-}
-
-class Position {
-    int x;
-    int y;
-
-    Position(int x, int y) {
-        this.x = x;
-        this.y = y;
-    }
-
-    @Override
-    public String toString() {
-        return "{" + x + "," + y + "}";
-    }
-
-    @Override
-    public int hashCode() {
-        return 31 * x + y;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (obj == null) {
-            return false;
-        }
-        if (!(obj instanceof Position)) {
-            return false;
-        }
-        final Position other = (Position) obj;
-        return x == other.x
-                && y == other.y;
     }
 }
 
@@ -157,9 +158,22 @@ class Player {
             System.err.println(world.enemyBomb);
 
             if (world.target == null) {
-                world.target = findNearestCellWithHighestUtility(firstTurn ? 4 : Bomb.COUNTDOWN + 1, new HashSet<>());
+                final Set<Position> exceptions = new HashSet<>(2);
+                if (world.playerBomb != null) {
+                    exceptions.add(world.playerBomb.position);
+                }
+                if (world.enemyBomb != null) {
+                    exceptions.add(world.enemyBomb.position);
+                }
+                world.target = findNearestCellWithHighestUtility(firstTurn ? 4 : Bomb.COUNTDOWN + 1, exceptions);
             }
-            System.out.println("MOVE " + world.target.position.x + " " + world.target.position.y);
+            if (world.target.position.equals((world.player.position))) {
+                System.out.println("BOMB " + world.target.position.x + " " + world.target.position.y);
+                world.target = null;
+            } else {
+                System.out.println("MOVE " + world.target.position.x + " " + world.target.position.y);
+            }
+
             firstTurn = false;
         }
     }
@@ -181,6 +195,7 @@ class Player {
             final String row = in.nextLine();
             for (int columnIndex = 0; columnIndex < world.grid.width; ++columnIndex) {
                 final Cell cell = new Cell();
+                cell.position = new Position(columnIndex, rowIndex);
                 final char typeSymbol = row.charAt(columnIndex);
                 if (typeSymbol == Cell.Type.Box.symbol) {
                     cell.type = Cell.Type.Box;
@@ -199,8 +214,8 @@ class Player {
             switch (entityType) {
                 case Boomer.ENTITY_TYPE:
                     Boomer boomer = (owner == world.player.id) ? world.player : world.enemy;
-                    boomer.x = x;
-                    boomer.y = y;
+                    boomer.position.x = x;
+                    boomer.position.y = y;
                     boomer.bombsAvailable = param1;
                     boomer.explosionRange = param2;
                     break;
@@ -211,8 +226,8 @@ class Player {
                     } else {
                         world.enemyBomb = bomb;
                     }
-                    bomb.x = x;
-                    bomb.y = y;
+                    bomb.position.x = x;
+                    bomb.position.y = y;
                     bomb.timer = param1;
                     bomb.explosionRange = param2;
                     break;
@@ -267,16 +282,15 @@ class Player {
         }
     }
 
-    Target findNearestCellWithHighestUtility(int scanRange, Set<Position> exceptions) {
+    Target findNearestCellWithHighestUtility(int scanRange, final Set<Position> exceptions) {
         final int width = world.grid.width;
         final int height = world.grid.height;
-        final int playerX = world.player.x;
-        final int playerY = world.player.y;
+        final int playerX = world.player.position.x;
+        final int playerY = world.player.position.y;
         final int columnDeltaMin = Math.max(-scanRange, 0 - playerX);
         final int columnDeltaMax = Math.min(scanRange, width - 1 - playerX);
         int distanceToMax = 0;
-        int maxX = 0;
-        int maxY = 0;
+        Position positionOfMax = new Position(0, 0);
         int max = 0;
         for (int columnDelta = columnDeltaMin; columnDelta <= columnDeltaMax; ++columnDelta) {
             final int columnIndex = playerX + columnDelta;
@@ -284,7 +298,8 @@ class Player {
             final int rowDeltaMax = Math.min(scanRange - columnDelta, height - 1 - playerY);
             for (int rowDelta = rowDeltaMin; rowDelta <= rowDeltaMax; ++rowDelta) {
                 final int rowIndex = playerY + rowDelta;
-                if (exceptions.contains(new Position(columnDelta, rowDelta))) {
+                final Position currentPosition = new Position(columnIndex, rowIndex);
+                if (exceptions.contains(currentPosition)) {
                     continue;
                 }
                 final int currentUtility = world.grid.cells[columnIndex][rowIndex].utility;
@@ -293,15 +308,14 @@ class Player {
                 }
                 final int currentDistance = calculateDistance(playerX, playerY, columnIndex, rowIndex);
                 if (currentUtility > max || (currentUtility == max && currentDistance < distanceToMax)) {
-                    maxX = columnIndex;
-                    maxY = rowIndex;
+                    positionOfMax = currentPosition;
                     max = currentUtility;
                     distanceToMax = currentDistance;
                 }
             }
         }
         final Target target = new Target();
-        target.position = new Position(maxX, maxY);
+        target.position = positionOfMax;
         target.distance = distanceToMax;
         target.utility = max;
         return target;
