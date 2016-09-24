@@ -37,7 +37,6 @@ class Boomer {
     static final int ENTITY_TYPE = 0;
     int id;
     Position position = new Position(0, 0);
-    int maxBombsAvailable = 1;
     int bombsAvailable;
     int explosionRange;
 
@@ -228,17 +227,14 @@ class Player {
 //            System.err.println(world.enemyBomb);
             
 
-            int scanRange = Bomb.COUNTDOWN;
-            if (world.player.bombsAvailable > 0) {
-                scanRange = 4;
-            }
+            int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
             world.target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
             if (world.target == null) {
                 scanRange *= 2;
                 world.target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
             }
             if (world.target == null) {
-                scanRange *= 2;
+                scanRange = 50;
                 world.target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
             }
             if (world.target == null) {
@@ -351,11 +347,11 @@ class Player {
                         continue;
                     }
                     final int distanceToBonus = calculateDistance(world.player.position, cell.position);
-                    cell.utility = (distanceToBonus <= 2) ? 5 : 0;
+                    cell.utility = Math.max(5 - distanceToBonus, 0);
                     if (cell.type == Cell.Type.ExtraRange && world.player.explosionRange > 4) {
                         cell.utility = 0;
                     }
-                    if (cell.type == Cell.Type.ExtraBomb && world.player.maxBombsAvailable > 2) {
+                    if (cell.type == Cell.Type.ExtraBomb && (world.player.bombsAvailable + world.playerBombs.size()) > 2) {
                         cell.utility = 0;
                     }
                 }
