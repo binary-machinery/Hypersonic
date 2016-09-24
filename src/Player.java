@@ -142,6 +142,11 @@ class Target {
     Position position;
     int distance;
     int utility;
+
+    @Override
+    public String toString() {
+        return "Target {" + position + "," + distance + "," + utility + "}";
+    }
 }
 
 class World {
@@ -171,23 +176,33 @@ class Player {
         while (true) {
             updateWorldState();
             in.nextLine();
-            calculateCellsWeight();
 
-            System.err.println(world.grid.showTypes());
+            final Set<Position> exceptions = new HashSet<>(2);
+            if (world.playerBomb != null) {
+                exceptions.add(world.playerBomb.position);
+                getBoxesAffectedByExplosion(world.playerBomb.position, world.playerBomb.explosionRange, null).forEach(c -> exceptions.add(c.position));
+            }
+            if (world.enemyBomb != null) {
+                exceptions.add(world.enemyBomb.position);
+                getBoxesAffectedByExplosion(world.enemyBomb.position, world.enemyBomb.explosionRange, null).forEach(c -> exceptions.add(c.position));
+            }
+
+            calculateCellsUtility(exceptions);
+
+//            System.err.println(world.grid.showTypes());
             System.err.println(world.grid.showUtility());
-            System.err.println(world.player);
-            System.err.println(world.enemy);
-            System.err.println(world.playerBomb);
-            System.err.println(world.enemyBomb);
+//            System.err.println(world.player);
+//            System.err.println(world.enemy);
+//            System.err.println(world.playerBomb);
+//            System.err.println(world.enemyBomb);
+            System.err.println(world.target);
+
+            if (world.enemyBomb != null && world.enemyBomb.timer == Bomb.COUNTDOWN) {
+                // then enemy just have placed the bomb, old target is not actual now
+                world.target = null;
+            }
 
             if (world.target == null) {
-                final Set<Position> exceptions = new HashSet<>(2);
-                if (world.playerBomb != null) {
-                    exceptions.add(world.playerBomb.position);
-                }
-                if (world.enemyBomb != null) {
-                    exceptions.add(world.enemyBomb.position);
-                }
                 world.target = findNearestCellWithHighestUtility(firstTurn ? 4 : Bomb.COUNTDOWN + 1, exceptions);
             }
             if (world.target.position.equals((world.player.position))) {
@@ -260,7 +275,7 @@ class Player {
         }
     }
 
-    void calculateCellsWeight() {
+    void calculateCellsUtility(final Set<Position> exceptions) {
         final int width = world.grid.width;
         final int height = world.grid.height;
         final int bombRange = world.player.explosionRange - 1;
@@ -271,13 +286,13 @@ class Player {
                     // TODO: process non floor cells
                     continue;
                 }
-                final Set<Cell> boxes = getBoxesAffectedByExplosion(new Position(columnIndex, rowIndex), bombRange);
+                final Set<Cell> boxes = getBoxesAffectedByExplosion(new Position(columnIndex, rowIndex), bombRange, exceptions);
                 cell.utility = boxes.size();
             }
         }
     }
 
-    Set<Cell> getBoxesAffectedByExplosion(Position bombPosition, int bombRange) {
+    Set<Cell> getBoxesAffectedByExplosion(Position bombPosition, int bombRange, final Set<Position> exceptions) {
         final int width = world.grid.width;
         final int height = world.grid.height;
         final int explosionColumnLeft = Math.max(bombPosition.x - bombRange, 0);
@@ -288,28 +303,36 @@ class Player {
         for (int explosionColumnIndex = bombPosition.x - 1; explosionColumnIndex >= explosionColumnLeft; --explosionColumnIndex) {
             final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
             if (cell.type == Cell.Type.Box) {
-                boxes.add(cell);
+                if (exceptions == null || !exceptions.contains(cell.position)) {
+                    boxes.add(cell);
+                }
                 break;
             }
         }
         for (int explosionColumnIndex = bombPosition.x + 1; explosionColumnIndex <= explosionColumnRight; ++explosionColumnIndex) {
             final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
             if (cell.type == Cell.Type.Box) {
-                boxes.add(cell);
+                if (exceptions == null || !exceptions.contains(cell.position)) {
+                    boxes.add(cell);
+                }
                 break;
             }
         }
         for (int explosionRowIndex = bombPosition.y - 1; explosionRowIndex >= explosionRowTop; --explosionRowIndex) {
             final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
             if (cell.type == Cell.Type.Box) {
-                boxes.add(cell);
+                if (exceptions == null || !exceptions.contains(cell.position)) {
+                    boxes.add(cell);
+                }
                 break;
             }
         }
         for (int explosionRowIndex = bombPosition.y + 1; explosionRowIndex <= explosionRowBottom; ++explosionRowIndex) {
             final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
             if (cell.type == Cell.Type.Box) {
-                boxes.add(cell);
+                if (exceptions == null || !exceptions.contains(cell.position)) {
+                    boxes.add(cell);
+                }
                 break;
             }
         }
