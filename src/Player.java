@@ -182,8 +182,8 @@ class World {
     final Grid grid = new Grid();
     final Boomer player = new Boomer();
     final Boomer enemy = new Boomer();
-    Bomb playerBomb;
-    Bomb enemyBomb;
+    List<Bomb> playerBombs = new ArrayList<>();
+    List<Bomb> enemyBombs = new ArrayList<>();
     final Map<Position, Item> items = new HashMap<>();
     Target target;
 }
@@ -207,13 +207,13 @@ class Player {
             in.nextLine();
 
             final Set<Position> exceptions = new HashSet<>(2);
-            if (world.playerBomb != null) {
-                exceptions.add(world.playerBomb.position);
-                getBoxesAffectedByExplosion(world.playerBomb.position, world.playerBomb.explosionRange, null).forEach(c -> exceptions.add(c.position));
+            for (Bomb bomb : world.playerBombs) {
+                exceptions.add(bomb.position);
+                getBoxesAffectedByExplosion(bomb.position, bomb.explosionRange, null).forEach(c -> exceptions.add(c.position));
             }
-            if (world.enemyBomb != null) {
-                exceptions.add(world.enemyBomb.position);
-                getBoxesAffectedByExplosion(world.enemyBomb.position, world.enemyBomb.explosionRange, null).forEach(c -> exceptions.add(c.position));
+            for (Bomb bomb : world.enemyBombs) {
+                exceptions.add(bomb.position);
+                getBoxesAffectedByExplosion(bomb.position, bomb.explosionRange, null).forEach(c -> exceptions.add(c.position));
             }
 
             calculateCellsUtility(exceptions);
@@ -266,8 +266,8 @@ class Player {
     }
 
     void updateWorldState() {
-        world.playerBomb = null;
-        world.enemyBomb = null;
+        world.playerBombs.clear();
+        world.enemyBombs.clear();
         world.grid.clear();
         for (int rowIndex = 0; rowIndex < world.grid.height; rowIndex++) {
             final String row = in.nextLine();
@@ -304,9 +304,9 @@ class Player {
                 case Bomb.ENTITY_TYPE:
                     final Bomb bomb = new Bomb();
                     if (owner == world.player.id) {
-                        world.playerBomb = bomb;
+                        world.playerBombs.add(bomb);
                     } else {
-                        world.enemyBomb = bomb;
+                        world.enemyBombs.add(bomb);
                     }
                     bomb.position.x = x;
                     bomb.position.y = y;
