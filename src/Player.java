@@ -81,6 +81,29 @@ class Cell {
     public String toString() {
         return "" + type.symbol;
     }
+
+    @Override
+    public int hashCode() {
+        // ignore utility
+        int res = 0;
+        res = 31 * res + position.hashCode();
+        res = 31 * res + type.hashCode();
+        return res;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        // ignore utility
+        if (obj == null) {
+            return false;
+        }
+        if (!(obj instanceof Cell)) {
+            return false;
+        }
+        final Cell other = (Cell) obj;
+        return position.equals(other.position)
+                && type == other.type;
+    }
 }
 
 class Grid {
@@ -248,38 +271,49 @@ class Player {
                     // TODO: process non floor cells
                     continue;
                 }
-                final int explosionColumnLeft = Math.max(columnIndex - bombRange, 0);
-                final int explosionColumnRight = Math.min(columnIndex + bombRange, width - 1);
-                final int explosionRowTop = Math.max(rowIndex - bombRange, 0);
-                final int explosionRowBottom = Math.min(rowIndex + bombRange, height - 1);
-                int crashedBoxCount = 0;
-                for (int explosionColumnIndex = columnIndex - 1; explosionColumnIndex >= explosionColumnLeft; --explosionColumnIndex) {
-                    if (world.grid.cells[explosionColumnIndex][rowIndex].type == Cell.Type.Box) {
-                        ++crashedBoxCount;
-                        break;
-                    }
-                }
-                for (int explosionColumnIndex = columnIndex + 1; explosionColumnIndex <= explosionColumnRight; ++explosionColumnIndex) {
-                    if (world.grid.cells[explosionColumnIndex][rowIndex].type == Cell.Type.Box) {
-                        ++crashedBoxCount;
-                        break;
-                    }
-                }
-                for (int explosionRowIndex = rowIndex - 1; explosionRowIndex >= explosionRowTop; --explosionRowIndex) {
-                    if (world.grid.cells[columnIndex][explosionRowIndex].type == Cell.Type.Box) {
-                        ++crashedBoxCount;
-                        break;
-                    }
-                }
-                for (int explosionRowIndex = rowIndex + 1; explosionRowIndex <= explosionRowBottom; ++explosionRowIndex) {
-                    if (world.grid.cells[columnIndex][explosionRowIndex].type == Cell.Type.Box) {
-                        ++crashedBoxCount;
-                        break;
-                    }
-                }
-                cell.utility = crashedBoxCount;
+                final Set<Cell> boxes = getBoxesAffectedByExplosion(new Position(columnIndex, rowIndex), bombRange);
+                cell.utility = boxes.size();
             }
         }
+    }
+
+    Set<Cell> getBoxesAffectedByExplosion(Position bombPosition, int bombRange) {
+        final int width = world.grid.width;
+        final int height = world.grid.height;
+        final int explosionColumnLeft = Math.max(bombPosition.x - bombRange, 0);
+        final int explosionColumnRight = Math.min(bombPosition.x + bombRange, width - 1);
+        final int explosionRowTop = Math.max(bombPosition.y - bombRange, 0);
+        final int explosionRowBottom = Math.min(bombPosition.y + bombRange, height - 1);
+        final Set<Cell> boxes = new HashSet<>(4);
+        for (int explosionColumnIndex = bombPosition.x - 1; explosionColumnIndex >= explosionColumnLeft; --explosionColumnIndex) {
+            final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
+            if (cell.type == Cell.Type.Box) {
+                boxes.add(cell);
+                break;
+            }
+        }
+        for (int explosionColumnIndex = bombPosition.x + 1; explosionColumnIndex <= explosionColumnRight; ++explosionColumnIndex) {
+            final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
+            if (cell.type == Cell.Type.Box) {
+                boxes.add(cell);
+                break;
+            }
+        }
+        for (int explosionRowIndex = bombPosition.y - 1; explosionRowIndex >= explosionRowTop; --explosionRowIndex) {
+            final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
+            if (cell.type == Cell.Type.Box) {
+                boxes.add(cell);
+                break;
+            }
+        }
+        for (int explosionRowIndex = bombPosition.y + 1; explosionRowIndex <= explosionRowBottom; ++explosionRowIndex) {
+            final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
+            if (cell.type == Cell.Type.Box) {
+                boxes.add(cell);
+                break;
+            }
+        }
+        return boxes;
     }
 
     Target findNearestCellWithHighestUtility(int scanRange, final Set<Position> exceptions) {
