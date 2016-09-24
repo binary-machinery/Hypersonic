@@ -94,6 +94,30 @@ class Position {
     public String toString() {
         return "{" + x + "," + y + "}";
     }
+
+    @Override
+    public int hashCode() {
+        return 31 * x + y;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (!(obj instanceof Position)) {
+            return false;
+        }
+        final Position other = (Position) obj;
+        return x == other.x
+                && y == other.y;
+    }
+}
+
+class Target {
+    Position position;
+    int distance;
+    int utility;
 }
 
 class World {
@@ -102,6 +126,7 @@ class World {
     Boomer enemy = new Boomer();
     Bomb playerBomb;
     Bomb enemyBomb;
+    Target target;
 }
 
 // main class must be Player
@@ -118,6 +143,7 @@ class Player {
 
     void run() {
         // game loop
+        boolean firstTurn = true;
         while (true) {
             updateWorldState();
             in.nextLine();
@@ -130,9 +156,11 @@ class Player {
             System.err.println(world.playerBomb);
             System.err.println(world.enemyBomb);
 
-            final Position target = findNearestCellWithHighestUtility(Bomb.COUNTDOWN + 1);
-
-            System.out.println("MOVE " + target.x + " " + target.y);
+            if (world.target == null) {
+                world.target = findNearestCellWithHighestUtility(firstTurn ? 4 : Bomb.COUNTDOWN + 1, new HashSet<>());
+            }
+            System.out.println("MOVE " + world.target.position.x + " " + world.target.position.y);
+            firstTurn = false;
         }
     }
 
@@ -239,7 +267,7 @@ class Player {
         }
     }
 
-    Position findNearestCellWithHighestUtility(int scanRange) {
+    Target findNearestCellWithHighestUtility(int scanRange, Set<Position> exceptions) {
         final int width = world.grid.width;
         final int height = world.grid.height;
         final int playerX = world.player.x;
@@ -256,6 +284,9 @@ class Player {
             final int rowDeltaMax = Math.min(scanRange - columnDelta, height - 1 - playerY);
             for (int rowDelta = rowDeltaMin; rowDelta <= rowDeltaMax; ++rowDelta) {
                 final int rowIndex = playerY + rowDelta;
+                if (exceptions.contains(new Position(columnDelta, rowDelta))) {
+                    continue;
+                }
                 final int currentUtility = world.grid.cells[columnIndex][rowIndex].utility;
                 if (currentUtility < max) {
                     continue;
@@ -269,7 +300,11 @@ class Player {
                 }
             }
         }
-        return new Position(maxX, maxY);
+        final Target target = new Target();
+        target.position = new Position(maxX, maxY);
+        target.distance = distanceToMax;
+        target.utility = max;
+        return target;
     }
 
     int calculateDistance(int x1, int y1, int x2, int y2) {
