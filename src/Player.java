@@ -366,6 +366,9 @@ class Player {
         final Set<Cell> boxes = new HashSet<>(4);
         for (int explosionColumnIndex = bombPosition.x - 1; explosionColumnIndex >= explosionColumnLeft; --explosionColumnIndex) {
             final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
+            if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
+                break;
+            }
             if (Cell.BOX_SUBTYPES.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
@@ -375,6 +378,9 @@ class Player {
         }
         for (int explosionColumnIndex = bombPosition.x + 1; explosionColumnIndex <= explosionColumnRight; ++explosionColumnIndex) {
             final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
+            if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
+                break;
+            }
             if (Cell.BOX_SUBTYPES.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
@@ -384,6 +390,9 @@ class Player {
         }
         for (int explosionRowIndex = bombPosition.y - 1; explosionRowIndex >= explosionRowTop; --explosionRowIndex) {
             final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
+            if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
+                break;
+            }
             if (Cell.BOX_SUBTYPES.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
@@ -393,6 +402,9 @@ class Player {
         }
         for (int explosionRowIndex = bombPosition.y + 1; explosionRowIndex <= explosionRowBottom; ++explosionRowIndex) {
             final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
+            if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
+                break;
+            }
             if (Cell.BOX_SUBTYPES.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
