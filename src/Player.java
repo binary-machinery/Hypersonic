@@ -1,6 +1,4 @@
-import java.util.HashSet;
-import java.util.Scanner;
-import java.util.Set;
+import java.util.*;
 
 class Position {
     int x;
@@ -61,10 +59,29 @@ class Bomb {
     }
 }
 
+class Item {
+    static final int ENTITY_CODE = 2;
+
+    enum Type {
+        ExtraRange(1),
+        ExtraBomb(2);
+
+        int code;
+        Type(int code) {
+            this.code = code;
+        }
+    }
+
+    Position position = new Position(0, 0);
+    Type type;
+}
+
 class Cell {
     enum Type {
         Floor('.'),
-        Box('0');
+        Box('0'),
+        BoxWithExtraRange('1'),
+        BoxWithExtraBomb('2');
 
         char symbol;
 
@@ -72,6 +89,8 @@ class Cell {
             this.symbol = symbol;
         }
     }
+
+    static EnumSet<Type> COUNTABLE_OBJECTS = EnumSet.of(Type.Box, Type.BoxWithExtraBomb, Type.BoxWithExtraRange);
 
     Position position;
     Type type = Type.Floor;
@@ -150,11 +169,12 @@ class Target {
 }
 
 class World {
-    Grid grid;
-    Boomer player = new Boomer();
-    Boomer enemy = new Boomer();
+    final Grid grid = new Grid();
+    final Boomer player = new Boomer();
+    final Boomer enemy = new Boomer();
     Bomb playerBomb;
     Bomb enemyBomb;
+    final Map<Position, Item> items = new HashMap<>();
     Target target;
 }
 
@@ -217,7 +237,6 @@ class Player {
     }
 
     void initWorld() {
-        world.grid = new Grid();
         world.grid.width = in.nextInt();
         world.grid.height = in.nextInt();
         world.grid.clear();
@@ -237,6 +256,10 @@ class Player {
                 final char typeSymbol = row.charAt(columnIndex);
                 if (typeSymbol == Cell.Type.Box.symbol) {
                     cell.type = Cell.Type.Box;
+                } else if (typeSymbol == Cell.Type.BoxWithExtraRange.symbol) {
+                    cell.type = Cell.Type.BoxWithExtraRange;
+                } else if (typeSymbol == Cell.Type.BoxWithExtraBomb.symbol) {
+                    cell.type = Cell.Type.BoxWithExtraBomb;
                 }
                 world.grid.cells[columnIndex][rowIndex] = cell;
             }
@@ -251,14 +274,14 @@ class Player {
             int param2 = in.nextInt();
             switch (entityType) {
                 case Boomer.ENTITY_TYPE:
-                    Boomer boomer = (owner == world.player.id) ? world.player : world.enemy;
+                    final Boomer boomer = (owner == world.player.id) ? world.player : world.enemy;
                     boomer.position.x = x;
                     boomer.position.y = y;
                     boomer.bombsAvailable = param1;
                     boomer.explosionRange = param2;
                     break;
                 case Bomb.ENTITY_TYPE:
-                    Bomb bomb = new Bomb();
+                    final Bomb bomb = new Bomb();
                     if (owner == world.player.id) {
                         world.playerBomb = bomb;
                     } else {
@@ -268,6 +291,17 @@ class Player {
                     bomb.position.y = y;
                     bomb.timer = param1;
                     bomb.explosionRange = param2;
+                    break;
+                case Item.ENTITY_CODE:
+                    final Item item = new Item();
+                    item.position.x = x;
+                    item.position.y = y;
+                    if (param1 == Item.Type.ExtraRange.code) {
+                        item.type = Item.Type.ExtraRange;
+                    } else if (param1 == Item.Type.ExtraBomb.code) {
+                        item.type = Item.Type.ExtraBomb;
+                    }
+                    world.items.put(item.position, item);
                     break;
                 default:
                     break;
@@ -302,7 +336,7 @@ class Player {
         final Set<Cell> boxes = new HashSet<>(4);
         for (int explosionColumnIndex = bombPosition.x - 1; explosionColumnIndex >= explosionColumnLeft; --explosionColumnIndex) {
             final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
-            if (cell.type == Cell.Type.Box) {
+            if (Cell.COUNTABLE_OBJECTS.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
                 }
@@ -311,7 +345,7 @@ class Player {
         }
         for (int explosionColumnIndex = bombPosition.x + 1; explosionColumnIndex <= explosionColumnRight; ++explosionColumnIndex) {
             final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
-            if (cell.type == Cell.Type.Box) {
+            if (Cell.COUNTABLE_OBJECTS.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
                 }
@@ -320,7 +354,7 @@ class Player {
         }
         for (int explosionRowIndex = bombPosition.y - 1; explosionRowIndex >= explosionRowTop; --explosionRowIndex) {
             final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
-            if (cell.type == Cell.Type.Box) {
+            if (Cell.COUNTABLE_OBJECTS.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
                 }
@@ -329,7 +363,7 @@ class Player {
         }
         for (int explosionRowIndex = bombPosition.y + 1; explosionRowIndex <= explosionRowBottom; ++explosionRowIndex) {
             final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
-            if (cell.type == Cell.Type.Box) {
+            if (Cell.COUNTABLE_OBJECTS.contains(cell.type)) {
                 if (exceptions == null || !exceptions.contains(cell.position)) {
                     boxes.add(cell);
                 }
