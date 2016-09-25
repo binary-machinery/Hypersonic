@@ -1,5 +1,8 @@
 import java.util.*;
 
+// TODO: increase utility for boxes with bonuses
+// 
+
 class Position {
     int x;
     int y;
