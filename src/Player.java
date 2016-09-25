@@ -623,48 +623,23 @@ class Player {
         }
     }
 
-    boolean calculateExplosionAreaForBomb(Bomb bomb, boolean explosionMap[][]) {
-        final int width = world.grid.width;
-        final int height = world.grid.height;
-        final int columnMin = Math.max(bomb.position.x - bomb.explosionRange + 1, 0);
-        final int columnMax = Math.min(bomb.position.x + bomb.explosionRange - 1, width - 1);
-        final int rowMin = Math.max(bomb.position.y - bomb.explosionRange + 1, 0);
-        final int rowMax = Math.min(bomb.position.y + bomb.explosionRange - 1, height - 1);
-        boolean newExplodedCellsAdded = false;
-        for (int columnIndex = columnMin; columnIndex <= columnMax; ++columnIndex) {
-            if (!explosionMap[columnIndex][bomb.position.y]) {
-                newExplodedCellsAdded = true;
-                explosionMap[columnIndex][bomb.position.y] = true;
-            }
-        }
-        for (int rowIndex = rowMin; rowIndex <= rowMax; ++rowIndex) {
-            if (!explosionMap[bomb.position.x][rowIndex]) {
-                newExplodedCellsAdded = true;
-                explosionMap[bomb.position.x][rowIndex] = true;
-            }
-        }
-        bomb.dangerCalculated = true;
-        return newExplodedCellsAdded;
-    }
-
     boolean[][] calculateDangerousCells() {
         final int width = world.grid.width;
         final int height = world.grid.height;
-        boolean explosionMap[][] = new boolean[width][height];
+        final ExplosionMapModel explosionMapModel = new ExplosionMapModel();
+        explosionMapModel.map = new boolean[width][height];
         final List<Bomb> bombs = world.allBombs;
         bombs.stream()
                 .filter(b -> b.timer == 2) // get bomb which will explode in next turn
-                .forEach(b -> calculateExplosionAreaForBomb(b, explosionMap));
-        long cellsChanged;
+                .forEach(b -> modelExplosionOfOneBomb(b, null, explosionMapModel));
         do {
-            cellsChanged = bombs.stream()
+            explosionMapModel.changed = false;
+            bombs.stream()
                     .filter(b -> !b.dangerCalculated)
-                    .filter(b -> explosionMap[b.position.x][b.position.y]) // filter bombs affected by another explosions
-                    .map(b -> calculateExplosionAreaForBomb(b, explosionMap))
-                    .filter(changed -> changed == true)
-                    .count();
-        } while (cellsChanged > 0);
-        return explosionMap;
+                    .filter(b -> explosionMapModel.map[b.position.x][b.position.y]) // filter bombs affected by another explosions
+                    .forEach(b -> modelExplosionOfOneBomb(b, null, explosionMapModel));
+        } while (explosionMapModel.changed);
+        return explosionMapModel.map;
     }
 
     void modelExplosionOfOneBomb(
