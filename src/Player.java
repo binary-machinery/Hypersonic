@@ -1,7 +1,8 @@
 import java.util.*;
 
 // TODO: increase utility for boxes with bonuses
-// 
+// TODO: be aggressive
+// TODO: improve dodging
 
 class Position {
     int x;
@@ -572,7 +573,22 @@ class Player {
     void calculateUtilityForCell(final Cell cell, final Set<Position> ignoredCells) {
         if (Cell.PASSABLE_SUBTYPES.contains(cell.type)) {
             final Set<Cell> boxes = getBoxesAffectedByExplosion(cell.position, world.player.explosionRange - 1, ignoredCells);
-            cell.utility = boxes.size();
+            cell.utility = 0;
+            boxes.forEach(c -> {
+                switch (c.type) {
+                    case Box:
+                        cell.utility += 1;
+                        break;
+                    case BoxWithExtraBomb:
+                        cell.utility += 2;
+                        break;
+                    case BoxWithExtraRange:
+                        cell.utility += 2;
+                        break;
+                    default:
+                        break;
+                }
+            });
         }
         if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
             if (ignoredCells.contains(cell.position)) {
@@ -848,6 +864,7 @@ class Player {
             adjacentPositions
                     .stream()
                     .filter(p -> explosionMap[p.x][p.y] == 0)
+                    .filter(p -> Cell.PASSABLE_SUBTYPES.contains(world.grid.cells[p.x][p.y].type))
                     .findAny()
                     .ifPresent(p -> {
                         final Move dodge = new Move(p, world.player);
