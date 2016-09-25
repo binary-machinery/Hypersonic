@@ -194,6 +194,7 @@ class World {
     final Map<Integer, Boomer> enemies = new HashMap<>(3);
     final List<Bomb> playerBombs = new ArrayList<>();
     final List<Bomb> enemyBombs = new ArrayList<>();
+    final List<Bomb> allBombs = new ArrayList<>();
     final Planner planner = new Planner();
 }
 
@@ -455,6 +456,7 @@ class Player {
     void updateWorldState() {
         world.playerBombs.clear();
         world.enemyBombs.clear();
+        world.allBombs.clear();
         world.grid.clear();
         for (int rowIndex = 0; rowIndex < world.grid.height; rowIndex++) {
             final String row = in.nextLine();
@@ -528,6 +530,8 @@ class Player {
                     break;
             }
         }
+        world.allBombs.addAll(world.playerBombs);
+        world.allBombs.addAll(world.enemyBombs);
     }
 
     void calculateUtilityForCell(final Cell cell, final Set<Position> ignoredCells) {
@@ -622,9 +626,7 @@ class Player {
         final int width = world.grid.width;
         final int height = world.grid.height;
         boolean explosionMap[][] = new boolean[width][height];
-        final List<Bomb> bombs = new ArrayList<>(world.playerBombs.size() + world.enemyBombs.size());
-        bombs.addAll(world.playerBombs);
-        bombs.addAll(world.enemyBombs);
+        final List<Bomb> bombs = world.allBombs;
         bombs.stream()
                 .filter(b -> b.timer == 2) // get bomb which will explode in next turn
                 .forEach(b -> calculateExplosionAreaForBomb(b, explosionMap));
