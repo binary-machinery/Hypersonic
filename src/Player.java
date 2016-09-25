@@ -1,7 +1,5 @@
 import java.util.*;
 
-// TODO: increase utility for boxes with bonuses
-// TODO: be aggressive
 // TODO: improve dodging
 
 class Position {
