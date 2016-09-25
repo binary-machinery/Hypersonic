@@ -451,15 +451,20 @@ class Player {
             if (world.planner.isEmpty()) {
                 int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
 //                int scanRange = 50; // unlimited
+                System.err.println("Scan range = " + scanRange);
                 Target target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
-//            if (target == null) {
-//                scanRange *= 2;
-//                target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
-//            }
-//            if (target == null) {
-//                scanRange = 50;
-//                target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
-//            }
+//                if (target == null) {
+//                    System.err.println("Nothing found");
+//                    scanRange *= 2;
+//                    System.err.println("Scan range = " + scanRange);
+//                    target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
+//                }
+//                if (target == null) {
+//                    System.err.println("Nothing found");
+//                    scanRange = 50;
+//                    System.err.println("Scan range = " + scanRange);
+//                    target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
+//                }
                 if (target == null) {
                     System.err.println("Empty target!");
                     world.planner.add(new SkipTurn(world.player));
@@ -589,13 +594,19 @@ class Player {
                         break;
                 }
             });
+            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position);
+            cell.utility += (int) adjacentPositions
+                    .stream()
+                    .map(p -> world.grid.cells[p.x][p.y].type)
+                    .filter(t -> Cell.PASSABLE_SUBTYPES.contains(t))
+                    .count();
         }
         if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
             if (ignoredCells.contains(cell.position)) {
                 return;
             }
             final int distanceToBonus = calculateDistance(world.player.position, cell.position);
-            cell.utility = Math.max(6 - distanceToBonus, 0);
+            cell.utility = Math.max(8 - distanceToBonus, 0);
         }
     }
 
@@ -648,7 +659,7 @@ class Player {
         final int height = world.grid.height;
         final ExplosionMapModel explosionMapModel = new ExplosionMapModel();
         explosionMapModel.map = new int[width][height];
-        final List<Bomb> bombs = world.allBombs;
+        final List<Bomb> bombs = world.enemyBombs;
         bombs.stream()
                 .filter(b -> b.timer == 2) // get bomb which will explode in next turn
                 .forEach(b -> modelExplosionOfOneBomb(b, null, explosionMapModel));
@@ -847,19 +858,7 @@ class Player {
 
     void checkExplosionsAndDodge(final int[][] explosionMap) {
         final Position playerPos = world.player.position;
-        final List<Position> adjacentPositions = new ArrayList<>(4);
-        if (playerPos.x - 1 >= 0) {
-            adjacentPositions.add(new Position(playerPos.x - 1, playerPos.y));
-        }
-        if (playerPos.x + 1 < world.grid.width) {
-            adjacentPositions.add(new Position(playerPos.x + 1, playerPos.y));
-        }
-        if (playerPos.y - 1 >= 0) {
-            adjacentPositions.add(new Position(playerPos.x, playerPos.y - 1));
-        }
-        if (playerPos.y + 1 < world.grid.height) {
-            adjacentPositions.add(new Position(playerPos.x, playerPos.y + 1));
-        }
+        final List<Position> adjacentPositions = generateAdjacentPositions(playerPos);
         if (explosionMap[playerPos.x][playerPos.y] == 1) {
             adjacentPositions
                     .stream()
@@ -892,5 +891,22 @@ class Player {
     int calculateDistance(Position pos1, Position pos2) {
         // manhattan distance without obstacles
         return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
+    }
+
+    List<Position> generateAdjacentPositions(Position center) {
+        final List<Position> adjacentPositions = new ArrayList<>(4);
+        if (center.x - 1 >= 0) {
+            adjacentPositions.add(new Position(center.x - 1, center.y));
+        }
+        if (center.x + 1 < world.grid.width) {
+            adjacentPositions.add(new Position(center.x + 1, center.y));
+        }
+        if (center.y - 1 >= 0) {
+            adjacentPositions.add(new Position(center.x, center.y - 1));
+        }
+        if (center.y + 1 < world.grid.height) {
+            adjacentPositions.add(new Position(center.x, center.y + 1));
+        }
+        return adjacentPositions;
     }
 }
