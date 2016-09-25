@@ -594,37 +594,49 @@ class Player {
         }
     }
 
-    void calculateExplosionAreaForBomb(Bomb bomb, boolean explosionMap[][]) {
+    boolean calculateExplosionAreaForBomb(Bomb bomb, boolean explosionMap[][]) {
         final int width = world.grid.width;
         final int height = world.grid.height;
         final int columnMin = Math.max(bomb.position.x - bomb.explosionRange + 1, 0);
         final int columnMax = Math.min(bomb.position.x + bomb.explosionRange - 1, width - 1);
         final int rowMin = Math.max(bomb.position.y - bomb.explosionRange + 1, 0);
         final int rowMax = Math.min(bomb.position.y + bomb.explosionRange - 1, height - 1);
+        boolean newExplodedCellsAdded = false;
         for (int columnIndex = columnMin; columnIndex <= columnMax; ++columnIndex) {
-            explosionMap[columnIndex][bomb.position.y] = true;
+            if (!explosionMap[columnIndex][bomb.position.y]) {
+                newExplodedCellsAdded = true;
+                explosionMap[columnIndex][bomb.position.y] = true;
+            }
         }
         for (int rowIndex = rowMin; rowIndex <= rowMax; ++rowIndex) {
-            explosionMap[bomb.position.x][rowIndex] = true;
+            if (!explosionMap[bomb.position.x][rowIndex]) {
+                newExplodedCellsAdded = true;
+                explosionMap[bomb.position.x][rowIndex] = true;
+            }
         }
         bomb.dangerCalculated = true;
+        return newExplodedCellsAdded;
     }
 
     boolean[][] calculateDangerousCells() {
         final int width = world.grid.width;
         final int height = world.grid.height;
-//        for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
-//            for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
-//                final Cell cell =
-//            }
-//        }
         boolean explosionMap[][] = new boolean[width][height];
         final List<Bomb> bombs = new ArrayList<>(world.playerBombs.size() + world.enemyBombs.size());
         bombs.addAll(world.playerBombs);
         bombs.addAll(world.enemyBombs);
         bombs.stream()
-                .filter(b -> b.timer == 1)
+                .filter(b -> b.timer == 2) // get bomb which will explode in next turn
                 .forEach(b -> calculateExplosionAreaForBomb(b, explosionMap));
+        long cellsChanged;
+        do {
+            cellsChanged = bombs.stream()
+                    .filter(b -> !b.dangerCalculated)
+                    .filter(b -> explosionMap[b.position.x][b.position.y]) // filter bombs affected by another explosions
+                    .map(b -> calculateExplosionAreaForBomb(b, explosionMap))
+                    .filter(changed -> changed == true)
+                    .count();
+        } while (cellsChanged > 0);
         return explosionMap;
     }
 
