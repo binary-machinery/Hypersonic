@@ -189,6 +189,120 @@ class World {
     final List<Bomb> playerBombs = new ArrayList<>();
     final List<Bomb> enemyBombs = new ArrayList<>();
     final Map<Position, Item> items = new HashMap<>();
+    final Planner planner = new Planner();
+}
+
+abstract class Action implements Comparable<Action> {
+    int priority;
+    int order;
+
+    @Override
+    public int compareTo(Action o) {
+        final int priorityDelta = priority - o.priority;
+        if (priorityDelta != 0) {
+            return priorityDelta;
+        }
+        return (order - o.order);
+    }
+
+    abstract void execute();
+    abstract boolean isDone();
+}
+
+class Move extends Action {
+    private Boomer player;
+    private Position targetPosition;
+
+    Move(Position targetPosition, Boomer player) {
+        this.player = player;
+        this.targetPosition = targetPosition;
+        priority = 5;
+    }
+
+    @Override
+    void execute() {
+        System.out.println("MOVE " + targetPosition.x + " " + targetPosition.y);
+    }
+
+    @Override
+    boolean isDone() {
+        return player.position.equals(targetPosition);
+    }
+
+    @Override
+    public String toString() {
+        return "Move " + targetPosition;
+    }
+}
+
+class PlaceBombAndMove extends Action {
+    private boolean done = false;
+    private Position targetPosition;
+
+    PlaceBombAndMove(Position targetPosition) {
+        this.targetPosition = targetPosition;
+        priority = 5;
+    }
+
+    @Override
+    void execute() {
+        System.out.println("BOMB " + targetPosition.x + " " + targetPosition.y);
+        done = true;
+    }
+
+    @Override
+    boolean isDone() {
+        return done;
+    }
+
+    @Override
+    public String toString() {
+        return "PlaceBombAndMove " + targetPosition;
+    }
+}
+
+class Planner {
+    private final PriorityQueue<Action> actions = new PriorityQueue<>(10);
+    private int orderCounter;
+
+    Action get() {
+        Action action = actions.peek();
+        if (action.isDone()) {
+            actions.remove();
+            System.err.println("Action removed: " + action);
+            return get();
+        } else {
+            System.err.println("Return action: " + action);
+            return action;
+        }
+    }
+
+    void executeNext() {
+        final Action action = get();
+        action.execute();
+        if (action.isDone()) {
+            actions.remove(action);
+        }
+    }
+
+    void add(Action action) {
+        action.order = orderCounter++;
+        actions.add(action);
+        System.err.println("Action added: " + action);
+    }
+
+    boolean isEmpty() {
+        return actions.isEmpty();
+    }
+
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder();
+        for (Action action : actions) {
+            sb.append(action.toString()).append("\n");
+        }
+        return sb.toString();
+    }
 }
 
 // main class must be Player
@@ -230,9 +344,10 @@ class Player {
 //            System.err.println(world.playerBomb);
 //            System.err.println(world.enemyBomb);
 
+            if (world.planner.isEmpty()) {
 //            int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
-            int scanRange = 50; // unlimited
-            Target target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
+                int scanRange = 50; // unlimited
+                Target target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
 //            if (target == null) {
 //                scanRange *= 2;
 //                target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
@@ -241,22 +356,29 @@ class Player {
 //                scanRange = 50;
 //                target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
 //            }
-            if (target == null) {
-                target = new Target();
-                target.position = new Position(0, 0);
-            }
-
-            System.err.println(target);
-
-            if (target.position.equals((world.player.position))) {
-                if (target.type == Target.Type.BombPlace) {
-                    System.out.println("BOMB " + target.position.x + " " + target.position.y);
-                } else {
-                    System.out.println("MOVE " + target.position.x + " " + target.position.y);
+                if (target == null) {
+                    target = new Target();
+                    target.position = new Position(0, 0);
                 }
-            } else {
-                System.out.println("MOVE " + target.position.x + " " + target.position.y);
+
+                System.err.println(target);
+
+                world.planner.add(new Move(target.position, world.player));
+                world.planner.add(new PlaceBombAndMove(target.position));
             }
+            System.err.println(world.planner);
+
+            world.planner.executeNext();
+
+//            if (target.position.equals((world.player.position))) {
+//                if (target.type == Target.Type.BombPlace) {
+//                    System.out.println("BOMB " + target.position.x + " " + target.position.y);
+//                } else {
+//                    System.out.println("MOVE " + target.position.x + " " + target.position.y);
+//                }
+//            } else {
+//                System.out.println("MOVE " + target.position.x + " " + target.position.y);
+//            }
         }
     }
 
