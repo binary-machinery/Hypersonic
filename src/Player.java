@@ -91,7 +91,8 @@ class Cell {
         BoxWithExtraBomb('2'),
         ExtraRange('R'),
         ExtraBomb('B'),
-        Wall('X');
+        Wall('X'),
+        Bomb('*');
 
         char symbol;
 
@@ -104,6 +105,7 @@ class Cell {
     static EnumSet<Type> BONUS_SUBTYPES = EnumSet.of(Type.ExtraRange, Type.ExtraBomb);
     static EnumSet<Type> PASSABLE_SUBTYPES = EnumSet.of(Type.Floor, Type.ExtraRange, Type.ExtraBomb);
     static EnumSet<Type> NONPASSABLE_SUBTYPES = EnumSet.of(Type.Box, Type.BoxWithExtraRange, Type.BoxWithExtraBomb, Type.Wall);
+    static EnumSet<Type> EXPLOSION_STOPPERS = EnumSet.of(Type.Box, Type.BoxWithExtraRange, Type.BoxWithExtraBomb, Type.Wall, Type.ExtraBomb, Type.ExtraRange, Type.Bomb);
 
     Position position;
     Type type = Type.Floor;
@@ -311,6 +313,30 @@ class PlaceBombAndMove extends Action {
     }
 }
 
+class DestroyedItemsModel {
+    EnumSet<Cell.Type> filter;
+    Set<Cell> destroyedObjects = new HashSet<>();
+    Set<Position> ignoredCells;
+
+    void checkExplosionWave(Cell cell) {
+        if (filter.contains(cell.type) && !ignoredCells.contains(cell.position)) {
+            destroyedObjects.add(cell);
+        }
+    }
+}
+
+class ExplosionMapModel {
+    boolean[][] map;
+    boolean changed = false;
+
+    void checkExplosionWave(Position position) {
+        if (!map[position.x][position.y]) {
+            map[position.x][position.y] = true;
+            changed = true;
+        }
+    }
+}
+
 class Planner {
     private final PriorityQueue<Action> actions = new PriorityQueue<>(10);
     private int orderCounter;
@@ -388,17 +414,15 @@ class Player {
 
             world.planner.clearFinished();
 
-            final Set<Position> ignoredCells = new HashSet<>(2);
-            for (Bomb bomb : world.playerBombs) {
+            final Set<Position> ignoredCells = new HashSet<>();
+            final DestroyedItemsModel destroyedItemsModel = new DestroyedItemsModel();
+            destroyedItemsModel.ignoredCells = ignoredCells;
+            destroyedItemsModel.filter = Cell.BOX_SUBTYPES;
+            for (Bomb bomb : world.allBombs) {
                 ignoredCells.add(bomb.position);
-                getBoxesAffectedByExplosion(bomb.position, bomb.explosionRange, null).forEach(c -> ignoredCells.add(c.position));
-                getItemsAffectedByExplosion(bomb.position, bomb.explosionRange, null).forEach(c -> ignoredCells.add(c.position));
+                modelExplosionOfOneBomb(bomb, destroyedItemsModel, null);
             }
-            for (Bomb bomb : world.enemyBombs) {
-                ignoredCells.add(bomb.position);
-                getBoxesAffectedByExplosion(bomb.position, bomb.explosionRange, null).forEach(c -> ignoredCells.add(c.position));
-                getItemsAffectedByExplosion(bomb.position, bomb.explosionRange, null).forEach(c -> ignoredCells.add(c.position));
-            }
+            destroyedItemsModel.destroyedObjects.forEach(cell -> ignoredCells.add(cell.position));
 
             calculateCellsUtility(ignoredCells);
             System.err.println(world.grid.showUtility());
@@ -532,6 +556,7 @@ class Player {
         }
         world.allBombs.addAll(world.playerBombs);
         world.allBombs.addAll(world.enemyBombs);
+        world.allBombs.forEach(b -> world.grid.cells[b.position.x][b.position.y].type = Cell.Type.Bomb);
     }
 
     void calculateUtilityForCell(final Cell cell, final Set<Position> ignoredCells) {
@@ -642,6 +667,71 @@ class Player {
         return explosionMap;
     }
 
+    void modelExplosionOfOneBomb(
+            final Bomb bomb,
+            final DestroyedItemsModel destroyedItemsModel,
+            final ExplosionMapModel explosionMapModel
+    ) {
+        final int width = world.grid.width;
+        final int height = world.grid.height;
+        final int explosionColumnLeft = Math.max(bomb.position.x - bomb.explosionRange + 1, 0);
+        final int explosionColumnRight = Math.min(bomb.position.x + bomb.explosionRange - 1, width - 1);
+        final int explosionRowTop = Math.max(bomb.position.y - bomb.explosionRange + 1, 0);
+        final int explosionRowBottom = Math.min(bomb.position.y + bomb.explosionRange - 1, height - 1);
+
+        for (int explosionColumnIndex = bomb.position.x - 1; explosionColumnIndex >= explosionColumnLeft; --explosionColumnIndex) {
+            final Cell cell = world.grid.cells[explosionColumnIndex][bomb.position.y];
+            if (destroyedItemsModel != null) {
+                destroyedItemsModel.checkExplosionWave(cell);
+            }
+            if (explosionMapModel != null) {
+                explosionMapModel.checkExplosionWave(cell.position);
+            }
+            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
+                break;
+            }
+        }
+
+        for (int explosionColumnIndex = bomb.position.x + 1; explosionColumnIndex <= explosionColumnRight; ++explosionColumnIndex) {
+            final Cell cell = world.grid.cells[explosionColumnIndex][bomb.position.y];
+            if (destroyedItemsModel != null) {
+                destroyedItemsModel.checkExplosionWave(cell);
+            }
+            if (explosionMapModel != null) {
+                explosionMapModel.checkExplosionWave(cell.position);
+            }
+            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
+                break;
+            }
+        }
+
+        for (int explosionRowIndex = bomb.position.y - 1; explosionRowIndex >= explosionRowTop; --explosionRowIndex) {
+            final Cell cell = world.grid.cells[bomb.position.x][explosionRowIndex];
+            if (destroyedItemsModel != null) {
+                destroyedItemsModel.checkExplosionWave(cell);
+            }
+            if (explosionMapModel != null) {
+                explosionMapModel.checkExplosionWave(cell.position);
+            }
+            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
+                break;
+            }
+        }
+
+        for (int explosionRowIndex = bomb.position.y + 1; explosionRowIndex <= explosionRowBottom; ++explosionRowIndex) {
+            final Cell cell = world.grid.cells[bomb.position.x][explosionRowIndex];
+            if (destroyedItemsModel != null) {
+                destroyedItemsModel.checkExplosionWave(cell);
+            }
+            if (explosionMapModel != null) {
+                explosionMapModel.checkExplosionWave(cell.position);
+            }
+            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
+                break;
+            }
+        }
+    }
+
     Set<Cell> getObjectsAffectedByExplosion(Position bombPosition, int bombRange, final Set<Position> ignoredCells, final EnumSet<Cell.Type> filter) {
         final int width = world.grid.width;
         final int height = world.grid.height;
@@ -650,6 +740,7 @@ class Player {
         final int explosionRowTop = Math.max(bombPosition.y - bombRange, 0);
         final int explosionRowBottom = Math.min(bombPosition.y + bombRange, height - 1);
         final Set<Cell> boxes = new HashSet<>(4);
+        final boolean explosionMap[][] = new boolean[width][height];
         for (int explosionColumnIndex = bombPosition.x - 1; explosionColumnIndex >= explosionColumnLeft; --explosionColumnIndex) {
             final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
             if (filter.contains(cell.type)) {
@@ -657,7 +748,7 @@ class Player {
                     boxes.add(cell);
                 }
             }
-            if (cell.type != Cell.Type.Floor) {
+            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
                 break;
             }
         }
@@ -668,7 +759,7 @@ class Player {
                     boxes.add(cell);
                 }
             }
-            if (cell.type != Cell.Type.Floor) {
+            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
                 break;
             }
         }
@@ -679,7 +770,7 @@ class Player {
                     boxes.add(cell);
                 }
             }
-            if (cell.type != Cell.Type.Floor) {
+            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
                 break;
             }
         }
@@ -690,7 +781,7 @@ class Player {
                     boxes.add(cell);
                 }
             }
-            if (cell.type != Cell.Type.Floor) {
+            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
                 break;
             }
         }
