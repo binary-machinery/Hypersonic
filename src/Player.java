@@ -96,10 +96,13 @@ class Cell {
 
     static EnumSet<Type> BOX_SUBTYPES = EnumSet.of(Type.Box, Type.BoxWithExtraBomb, Type.BoxWithExtraRange);
     static EnumSet<Type> BONUS_SUBTYPES = EnumSet.of(Type.ExtraRange, Type.ExtraBomb);
+    static EnumSet<Type> PASSABLE_SUBTYPES = EnumSet.of(Type.Floor, Type.ExtraRange, Type.ExtraBomb);
+    static EnumSet<Type> NONPASSABLE_SUBTYPES = EnumSet.of(Type.Box, Type.BoxWithExtraRange, Type.BoxWithExtraBomb, Type.Wall);
 
     Position position;
     Type type = Type.Floor;
     int utility;
+    boolean utilityCalculated = false;
 
     @Override
     public String toString() {
@@ -167,6 +170,7 @@ class Target {
         BombPlace,
         Bonus
     }
+
     Position position;
     int distance;
     int utility;
@@ -226,7 +230,6 @@ class Player {
 //            System.err.println(world.enemy);
 //            System.err.println(world.playerBomb);
 //            System.err.println(world.enemyBomb);
-            
 
             int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
             Target target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
@@ -251,7 +254,6 @@ class Player {
                 } else {
                     System.out.println("MOVE " + target.position.x + " " + target.position.y);
                 }
-                target = null;
             } else {
                 System.out.println("MOVE " + target.position.x + " " + target.position.y);
             }
@@ -335,28 +337,62 @@ class Player {
         }
     }
 
+    void calculateUtilityForCell(final Cell cell, final Set<Position> ignoredCells) {
+        if (cell.type == Cell.Type.Floor) {
+            final Set<Cell> boxes = getBoxesAffectedByExplosion(cell.position, world.player.explosionRange - 1, ignoredCells);
+            cell.utility = boxes.size();
+        } else if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
+            if (ignoredCells.contains(cell.position)) {
+                return;
+            }
+            final int distanceToBonus = calculateDistance(world.player.position, cell.position);
+            cell.utility = Math.max(5 - distanceToBonus, 0);
+            if (cell.type == Cell.Type.ExtraRange && world.player.explosionRange > 4) {
+                cell.utility = 0;
+            }
+            if (cell.type == Cell.Type.ExtraBomb && (world.player.bombsAvailable + world.playerBombs.size()) > 2) {
+                cell.utility = 0;
+            }
+        }
+    }
+
     void calculateCellsUtility(final Set<Position> ignoredCells) {
-        final int width = world.grid.width;
-        final int height = world.grid.height;
-        final int bombRange = world.player.explosionRange - 1;
-        for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
-            for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
-                final Cell cell = world.grid.cells[columnIndex][rowIndex];
-                if (cell.type == Cell.Type.Floor) {
-                    final Set<Cell> boxes = getBoxesAffectedByExplosion(new Position(columnIndex, rowIndex), bombRange, ignoredCells);
-                    cell.utility = boxes.size();
-                } else if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
-                    if (ignoredCells.contains(cell.position)) {
-                        continue;
-                    }
-                    final int distanceToBonus = calculateDistance(world.player.position, cell.position);
-                    cell.utility = Math.max(5 - distanceToBonus, 0);
-                    if (cell.type == Cell.Type.ExtraRange && world.player.explosionRange > 4) {
-                        cell.utility = 0;
-                    }
-                    if (cell.type == Cell.Type.ExtraBomb && (world.player.bombsAvailable + world.playerBombs.size()) > 2) {
-                        cell.utility = 0;
-                    }
+        final Queue<Cell> queue = new LinkedList<>();
+        final Cell cells[][] = world.grid.cells;
+        final Cell start = cells[world.player.position.x][world.player.position.y];
+        queue.add(start);
+        while (!queue.isEmpty()) {
+            final Cell cell = queue.poll();
+            if (ignoredCells.contains(cell.position) || cell.utilityCalculated) {
+                continue;
+            }
+            calculateUtilityForCell(cell, ignoredCells);
+            cell.utilityCalculated = true;
+
+            // add adjacent cells to queue
+            final Position pos = cell.position;
+            if (pos.x - 1 >= 0) {
+                final Cell adjacentCell = cells[pos.x - 1][pos.y];
+                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
+                    queue.add(adjacentCell);
+                }
+            }
+            if (pos.x + 1 < world.grid.width) {
+                final Cell adjacentCell = cells[pos.x + 1][pos.y];
+                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
+                    queue.add(adjacentCell);
+                }
+            }
+            if (pos.y - 1 >= 0) {
+                final Cell adjacentCell = cells[pos.x][pos.y - 1];
+                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
+                    queue.add(adjacentCell);
+                }
+            }
+            if (pos.y + 1 < world.grid.height) {
+                final Cell adjacentCell = cells[pos.x][pos.y + 1];
+                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
+                    queue.add(adjacentCell);
                 }
             }
         }
