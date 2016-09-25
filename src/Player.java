@@ -1,7 +1,5 @@
 import java.util.*;
 
-// TODO: cell with bonus can be considered as good place for bomb
-
 class Position {
     int x;
     int y;
@@ -401,9 +399,7 @@ class Player {
                 getItemsAffectedByExplosion(bomb.position, bomb.explosionRange, null).forEach(c -> ignoredCells.add(c.position));
             }
 
-            System.err.println("Calculate utility");
             calculateCellsUtility(ignoredCells);
-            System.err.println("Done");
 
             System.err.println(world.grid.showUtility());
 
@@ -524,15 +520,16 @@ class Player {
     }
 
     void calculateUtilityForCell(final Cell cell, final Set<Position> ignoredCells) {
-        if (cell.type == Cell.Type.Floor) {
+        if (Cell.PASSABLE_SUBTYPES.contains(cell.type)) {
             final Set<Cell> boxes = getBoxesAffectedByExplosion(cell.position, world.player.explosionRange - 1, ignoredCells);
             cell.utility = boxes.size();
-        } else if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
+        }
+        if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
             if (ignoredCells.contains(cell.position)) {
                 return;
             }
             final int distanceToBonus = calculateDistance(world.player.position, cell.position);
-            cell.utility = Math.max(6 - distanceToBonus, 0);
+            cell.utility += Math.max(4 - distanceToBonus, 0);
 //            if (cell.type == Cell.Type.ExtraRange && world.player.explosionRange > 4) {
 //                cell.utility = 0;
 //            }
