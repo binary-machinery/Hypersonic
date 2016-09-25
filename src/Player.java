@@ -185,11 +185,10 @@ class Target {
 class World {
     final Grid grid = new Grid();
     final Boomer player = new Boomer();
-    final Boomer enemy = new Boomer();
-    List<Bomb> playerBombs = new ArrayList<>();
-    List<Bomb> enemyBombs = new ArrayList<>();
+    final Map<Integer, Boomer> enemies = new HashMap<>(3);
+    final List<Bomb> playerBombs = new ArrayList<>();
+    final List<Bomb> enemyBombs = new ArrayList<>();
     final Map<Position, Item> items = new HashMap<>();
-//    Target target;
 }
 
 // main class must be Player
@@ -231,16 +230,17 @@ class Player {
 //            System.err.println(world.playerBomb);
 //            System.err.println(world.enemyBomb);
 
-            int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
+//            int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
+            int scanRange = 50; // unlimited
             Target target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
-            if (target == null) {
-                scanRange *= 2;
-                target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
-            }
-            if (target == null) {
-                scanRange = 50;
-                target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
-            }
+//            if (target == null) {
+//                scanRange *= 2;
+//                target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
+//            }
+//            if (target == null) {
+//                scanRange = 50;
+//                target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
+//            }
             if (target == null) {
                 target = new Target();
                 target.position = new Position(0, 0);
@@ -300,11 +300,21 @@ class Player {
             int param2 = in.nextInt();
             switch (entityType) {
                 case Boomer.ENTITY_TYPE:
-                    final Boomer boomer = (owner == world.player.id) ? world.player : world.enemy;
-                    boomer.position.x = x;
-                    boomer.position.y = y;
-                    boomer.bombsAvailable = param1;
-                    boomer.explosionRange = param2;
+                    if (owner == world.player.id) {
+                        world.player.position.x = x;
+                        world.player.position.y = y;
+                        world.player.bombsAvailable = param1;
+                        world.player.explosionRange = param2;
+                    } else {
+                        if (!world.enemies.containsKey(owner)) {
+                            world.enemies.put(owner, new Boomer());
+                        }
+                        final Boomer enemy = world.enemies.get(owner);
+                        enemy.position.x = x;
+                        enemy.position.y = y;
+                        enemy.bombsAvailable = param1;
+                        enemy.explosionRange = param2;
+                    }
                     break;
                 case Bomb.ENTITY_TYPE:
                     final Bomb bomb = new Bomb();
