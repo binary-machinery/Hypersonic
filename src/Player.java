@@ -266,7 +266,7 @@ class SkipTurn extends Action {
 
     @Override
     boolean checkPreconditions() {
-        return false;
+        return true;
     }
 
     @Override
@@ -280,12 +280,12 @@ class SkipTurn extends Action {
     }
 }
 
-class PlaceBombAndMove extends Action {
-    private boolean done = false;
+class PlaceBomb extends Action {
+    private boolean bombPlaced = false;
     private Position targetPosition;
     private Boomer player;
 
-    PlaceBombAndMove(Position targetPosition, Boomer player) {
+    PlaceBomb(Position targetPosition, Boomer player) {
         this.player = player;
         this.targetPosition = targetPosition;
         priority = 5;
@@ -293,23 +293,27 @@ class PlaceBombAndMove extends Action {
 
     @Override
     void execute() {
-        System.out.println("BOMB " + targetPosition.x + " " + targetPosition.y);
-        done = true;
+        if (player.position.equals(targetPosition)) {
+            System.out.println("BOMB " + targetPosition.x + " " + targetPosition.y);
+            bombPlaced = true;
+        } else {
+            System.out.println("MOVE " + targetPosition.x + " " + targetPosition.y);
+        }
     }
 
     @Override
     boolean checkPreconditions() {
-        return player.position.equals(targetPosition);
+        return !bombPlaced;
     }
 
     @Override
     boolean checkPostconditions() {
-        return done;
+        return bombPlaced;
     }
 
     @Override
     public String toString() {
-        return "PlaceBombAndMove " + targetPosition;
+        return "PlaceBomb " + targetPosition;
     }
 }
 
@@ -457,9 +461,10 @@ class Player {
                     world.planner.add(new SkipTurn(world.player));
                 } else {
                     System.err.println(target);
-                    world.planner.add(new Move(target.position, world.player));
                     if (target.type == Target.Type.BombPlace) {
-                        world.planner.add(new PlaceBombAndMove(target.position, world.player));
+                        world.planner.add(new PlaceBomb(target.position, world.player));
+                    } else {
+                        world.planner.add(new Move(target.position, world.player));
                     }
                 }
             }
@@ -571,13 +576,7 @@ class Player {
                 return;
             }
             final int distanceToBonus = calculateDistance(world.player.position, cell.position);
-            cell.utility += Math.max(4 - distanceToBonus, 0);
-//            if (cell.type == Cell.Type.ExtraRange && world.player.explosionRange > 4) {
-//                cell.utility = 0;
-//            }
-//            if (cell.type == Cell.Type.ExtraBomb && (world.player.bombsAvailable + world.playerBombs.size()) > 2) {
-//                cell.utility = 0;
-//            }
+            cell.utility = Math.max(6 - distanceToBonus, 0);
         }
     }
 
@@ -843,13 +842,11 @@ class Player {
             adjacentPositions.add(new Position(playerPos.x, playerPos.y + 1));
         }
         if (explosionMap[playerPos.x][playerPos.y] == 1) {
-            System.err.println("Player is about to explode!");
             adjacentPositions
                     .stream()
                     .filter(p -> explosionMap[p.x][p.y] == 0)
                     .findAny()
                     .ifPresent(p -> {
-                        System.err.println("Safety point found");
                         final Move dodge = new Move(p, world.player);
                         dodge.priority = 0;
                         world.planner.add(dodge);
@@ -876,8 +873,4 @@ class Player {
         // manhattan distance without obstacles
         return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
     }
-
-//    double findCosBetweenVectors(Position origin, Position vec1, Position vec2) {
-//
-//    }
 }
