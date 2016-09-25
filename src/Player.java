@@ -326,12 +326,12 @@ class DestroyedItemsModel {
 }
 
 class ExplosionMapModel {
-    boolean[][] map;
+    int[][] map;
     boolean changed = false;
 
     void checkExplosionWave(Position position) {
-        if (!map[position.x][position.y]) {
-            map[position.x][position.y] = true;
+        if (map[position.x][position.y] == 0) {
+            map[position.x][position.y] = 1;
             changed = true;
         }
     }
@@ -419,21 +419,21 @@ class Player {
             destroyedItemsModel.ignoredCells = ignoredCells;
             destroyedItemsModel.filter = Cell.BOX_SUBTYPES;
             for (Bomb bomb : world.allBombs) {
-                ignoredCells.add(bomb.position);
                 modelExplosionOfOneBomb(bomb, destroyedItemsModel, null);
             }
+            world.allBombs.forEach(b -> ignoredCells.add(b.position));
             destroyedItemsModel.destroyedObjects.forEach(cell -> ignoredCells.add(cell.position));
 
             calculateCellsUtility(ignoredCells);
             System.err.println(world.grid.showUtility());
-            final boolean[][] cells = calculateDangerousCells();
+            final int[][] explosionMap = calculateExplosionMap();
             {
                 final int width = world.grid.width;
                 final int height = world.grid.height;
                 final StringBuilder sb = new StringBuilder(height * width);
                 for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
                     for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
-                        sb.append(cells[columnIndex][rowIndex] ? '*' : '.');
+                        sb.append(explosionMap[columnIndex][rowIndex] == 0 ? "." : explosionMap[columnIndex][rowIndex]);
                     }
                     sb.append("\n");
                 }
@@ -463,6 +463,8 @@ class Player {
                     }
                 }
             }
+            checkExplosionsAndDodge(explosionMap);
+
             System.err.println(world.planner);
 
             world.planner.executeNext();
@@ -623,11 +625,11 @@ class Player {
         }
     }
 
-    boolean[][] calculateDangerousCells() {
+    int[][] calculateExplosionMap() {
         final int width = world.grid.width;
         final int height = world.grid.height;
         final ExplosionMapModel explosionMapModel = new ExplosionMapModel();
-        explosionMapModel.map = new boolean[width][height];
+        explosionMapModel.map = new int[width][height];
         final List<Bomb> bombs = world.allBombs;
         bombs.stream()
                 .filter(b -> b.timer == 2) // get bomb which will explode in next turn
@@ -636,7 +638,7 @@ class Player {
             explosionMapModel.changed = false;
             bombs.stream()
                     .filter(b -> !b.dangerCalculated)
-                    .filter(b -> explosionMapModel.map[b.position.x][b.position.y]) // filter bombs affected by another explosions
+                    .filter(b -> explosionMapModel.map[b.position.x][b.position.y] == 1) // filter bombs affected by another explosions
                     .forEach(b -> modelExplosionOfOneBomb(b, null, explosionMapModel));
         } while (explosionMapModel.changed);
         return explosionMapModel.map;
@@ -653,6 +655,10 @@ class Player {
         final int explosionColumnRight = Math.min(bomb.position.x + bomb.explosionRange - 1, width - 1);
         final int explosionRowTop = Math.max(bomb.position.y - bomb.explosionRange + 1, 0);
         final int explosionRowBottom = Math.min(bomb.position.y + bomb.explosionRange - 1, height - 1);
+
+        if (explosionMapModel != null) {
+            explosionMapModel.checkExplosionWave(bomb.position);
+        }
 
         for (int explosionColumnIndex = bomb.position.x - 1; explosionColumnIndex >= explosionColumnLeft; --explosionColumnIndex) {
             final Cell cell = world.grid.cells[explosionColumnIndex][bomb.position.y];
@@ -818,6 +824,46 @@ class Player {
             return target;
         } else {
             return null;
+        }
+    }
+
+    void checkExplosionsAndDodge(final int[][] explosionMap) {
+        final Position playerPos = world.player.position;
+        final List<Position> adjacentPositions = new ArrayList<>(4);
+        if (playerPos.x - 1 >= 0) {
+            adjacentPositions.add(new Position(playerPos.x - 1, playerPos.y));
+        }
+        if (playerPos.x + 1 < world.grid.width) {
+            adjacentPositions.add(new Position(playerPos.x + 1, playerPos.y));
+        }
+        if (playerPos.y - 1 >= 0) {
+            adjacentPositions.add(new Position(playerPos.x, playerPos.y - 1));
+        }
+        if (playerPos.y + 1 < world.grid.height) {
+            adjacentPositions.add(new Position(playerPos.x, playerPos.y + 1));
+        }
+        if (explosionMap[playerPos.x][playerPos.y] == 1) {
+            System.err.println("Player is about to explode!");
+            adjacentPositions
+                    .stream()
+                    .filter(p -> explosionMap[p.x][p.y] == 0)
+                    .findAny()
+                    .ifPresent(p -> {
+                        System.err.println("Safety point found");
+                        final Move dodge = new Move(p, world.player);
+                        dodge.priority = 0;
+                        world.planner.add(dodge);
+                    });
+        } else {
+            final long dangerousCells = adjacentPositions
+                    .stream()
+                    .filter(p -> explosionMap[p.x][p.y] == 1)
+                    .count();
+            if (dangerousCells > 0) {
+                final SkipTurn skip = new SkipTurn(world.player);
+                skip.priority = 0;
+                world.planner.add(skip);
+            }
         }
     }
 
