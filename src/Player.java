@@ -1,5 +1,7 @@
 import java.util.*;
 
+// TODO: cell with bonus can be considered as good place for bomb
+
 class Position {
     int x;
     int y;
@@ -7,6 +9,11 @@ class Position {
     Position(int x, int y) {
         this.x = x;
         this.y = y;
+    }
+
+    Position(Position other) {
+        this.x = other.x;
+        this.y = other.y;
     }
 
     @Override
@@ -178,7 +185,7 @@ class Target {
 
     @Override
     public String toString() {
-        return "Target {" + position + "," + distance + "," + utility + "}";
+        return "Target {" + position + "," + distance + "," + utility + "," + type + "}";
     }
 }
 
@@ -206,7 +213,10 @@ abstract class Action implements Comparable<Action> {
     }
 
     abstract void execute();
-    abstract boolean isDone();
+
+    abstract boolean checkPreconditions();
+
+    abstract boolean checkPostconditions();
 }
 
 class Move extends Action {
@@ -225,7 +235,12 @@ class Move extends Action {
     }
 
     @Override
-    boolean isDone() {
+    boolean checkPreconditions() {
+        return !player.position.equals(targetPosition);
+    }
+
+    @Override
+    boolean checkPostconditions() {
         return player.position.equals(targetPosition);
     }
 
@@ -235,11 +250,42 @@ class Move extends Action {
     }
 }
 
+class SkipTurn extends Action {
+    private Boomer player;
+
+    SkipTurn(Boomer player) {
+        this.player = player;
+        priority = 5;
+    }
+
+    @Override
+    void execute() {
+        System.out.println("MOVE " + player.position.x + " " + player.position.y);
+    }
+
+    @Override
+    boolean checkPreconditions() {
+        return false;
+    }
+
+    @Override
+    boolean checkPostconditions() {
+        return true;
+    }
+
+    @Override
+    public String toString() {
+        return "SkipTurn at" + player.position;
+    }
+}
+
 class PlaceBombAndMove extends Action {
     private boolean done = false;
     private Position targetPosition;
+    private Boomer player;
 
-    PlaceBombAndMove(Position targetPosition) {
+    PlaceBombAndMove(Position targetPosition, Boomer player) {
+        this.player = player;
         this.targetPosition = targetPosition;
         priority = 5;
     }
@@ -251,7 +297,12 @@ class PlaceBombAndMove extends Action {
     }
 
     @Override
-    boolean isDone() {
+    boolean checkPreconditions() {
+        return player.position.equals(targetPosition);
+    }
+
+    @Override
+    boolean checkPostconditions() {
         return done;
     }
 
@@ -265,24 +316,34 @@ class Planner {
     private final PriorityQueue<Action> actions = new PriorityQueue<>(10);
     private int orderCounter;
 
-    Action get() {
-        Action action = actions.peek();
-        if (action.isDone()) {
-            actions.remove();
-            System.err.println("Action removed: " + action);
-            return get();
-        } else {
-            System.err.println("Return action: " + action);
-            return action;
+    void executeNext() {
+        final List<Action> actionsToRemove = new ArrayList<>();
+        for (Action action : actions) {
+            if (action.checkPreconditions()) {
+                System.err.println("Execute action: " + action);
+                action.execute();
+                if (action.checkPostconditions()) {
+                    actionsToRemove.add(action);
+                    System.err.println("Remove action: " + action);
+                }
+                break;
+            }
         }
+        actionsToRemove.forEach(actions::remove);
     }
 
-    void executeNext() {
-        final Action action = get();
-        action.execute();
-        if (action.isDone()) {
-            actions.remove(action);
+    void clearFinished() {
+        // for delayed consequences
+        final List<Action> actionsToRemove = new ArrayList<>();
+        for (Action action : actions) {
+            if (action.checkPostconditions()) {
+                actionsToRemove.add(action);
+                System.err.println("Remove action: " + action);
+            } else {
+                break;
+            }
         }
+        actionsToRemove.forEach(actions::remove);
     }
 
     void add(Action action) {
@@ -319,9 +380,14 @@ class Player {
 
     void run() {
         // game loop
+        long time = System.nanoTime();
         while (true) {
+            System.err.println("Time: " + (System.nanoTime() - time) / 1000000.0 + " ms");
+            time = System.nanoTime();
             updateWorldState();
             in.nextLine();
+
+            world.planner.clearFinished();
 
             final Set<Position> ignoredCells = new HashSet<>(2);
             for (Bomb bomb : world.playerBombs) {
@@ -335,18 +401,15 @@ class Player {
                 getItemsAffectedByExplosion(bomb.position, bomb.explosionRange, null).forEach(c -> ignoredCells.add(c.position));
             }
 
+            System.err.println("Calculate utility");
             calculateCellsUtility(ignoredCells);
+            System.err.println("Done");
 
-//            System.err.println(world.grid.showTypes());
             System.err.println(world.grid.showUtility());
-//            System.err.println(world.player);
-//            System.err.println(world.enemy);
-//            System.err.println(world.playerBomb);
-//            System.err.println(world.enemyBomb);
 
             if (world.planner.isEmpty()) {
-//            int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
-                int scanRange = 50; // unlimited
+                int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
+//                int scanRange = 50; // unlimited
                 Target target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
 //            if (target == null) {
 //                scanRange *= 2;
@@ -357,28 +420,19 @@ class Player {
 //                target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
 //            }
                 if (target == null) {
-                    target = new Target();
-                    target.position = new Position(0, 0);
+                    System.err.println("Empty target!");
+                    world.planner.add(new SkipTurn(world.player));
+                } else {
+                    System.err.println(target);
+                    world.planner.add(new Move(target.position, world.player));
+                    if (target.type == Target.Type.BombPlace) {
+                        world.planner.add(new PlaceBombAndMove(target.position, world.player));
+                    }
                 }
-
-                System.err.println(target);
-
-                world.planner.add(new Move(target.position, world.player));
-                world.planner.add(new PlaceBombAndMove(target.position));
             }
             System.err.println(world.planner);
 
             world.planner.executeNext();
-
-//            if (target.position.equals((world.player.position))) {
-//                if (target.type == Target.Type.BombPlace) {
-//                    System.out.println("BOMB " + target.position.x + " " + target.position.y);
-//                } else {
-//                    System.out.println("MOVE " + target.position.x + " " + target.position.y);
-//                }
-//            } else {
-//                System.out.println("MOVE " + target.position.x + " " + target.position.y);
-//            }
         }
     }
 
@@ -478,13 +532,13 @@ class Player {
                 return;
             }
             final int distanceToBonus = calculateDistance(world.player.position, cell.position);
-            cell.utility = Math.max(5 - distanceToBonus, 0);
-            if (cell.type == Cell.Type.ExtraRange && world.player.explosionRange > 4) {
-                cell.utility = 0;
-            }
-            if (cell.type == Cell.Type.ExtraBomb && (world.player.bombsAvailable + world.playerBombs.size()) > 2) {
-                cell.utility = 0;
-            }
+            cell.utility = Math.max(6 - distanceToBonus, 0);
+//            if (cell.type == Cell.Type.ExtraRange && world.player.explosionRange > 4) {
+//                cell.utility = 0;
+//            }
+//            if (cell.type == Cell.Type.ExtraBomb && (world.player.bombsAvailable + world.playerBombs.size()) > 2) {
+//                cell.utility = 0;
+//            }
         }
     }
 
@@ -495,35 +549,37 @@ class Player {
         queue.add(start);
         while (!queue.isEmpty()) {
             final Cell cell = queue.poll();
-            if (ignoredCells.contains(cell.position) || cell.utilityCalculated) {
+            if (cell.utilityCalculated) {
                 continue;
             }
-            calculateUtilityForCell(cell, ignoredCells);
+            if (!ignoredCells.contains(cell.position)) {
+                calculateUtilityForCell(cell, ignoredCells);
+            }
             cell.utilityCalculated = true;
 
             // add adjacent cells to queue
             final Position pos = cell.position;
             if (pos.x - 1 >= 0) {
                 final Cell adjacentCell = cells[pos.x - 1][pos.y];
-                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
+                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type) && !adjacentCell.utilityCalculated) {
                     queue.add(adjacentCell);
                 }
             }
             if (pos.x + 1 < world.grid.width) {
                 final Cell adjacentCell = cells[pos.x + 1][pos.y];
-                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
+                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type) && !adjacentCell.utilityCalculated) {
                     queue.add(adjacentCell);
                 }
             }
             if (pos.y - 1 >= 0) {
                 final Cell adjacentCell = cells[pos.x][pos.y - 1];
-                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
+                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type) && !adjacentCell.utilityCalculated) {
                     queue.add(adjacentCell);
                 }
             }
             if (pos.y + 1 < world.grid.height) {
                 final Cell adjacentCell = cells[pos.x][pos.y + 1];
-                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
+                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type) && !adjacentCell.utilityCalculated) {
                     queue.add(adjacentCell);
                 }
             }
