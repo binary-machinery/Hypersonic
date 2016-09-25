@@ -57,6 +57,7 @@ class Bomb {
     Position position = new Position(0, 0);
     int timer;
     int explosionRange;
+    boolean dangerCalculated = false;
 
     @Override
     public String toString() {
@@ -193,7 +194,6 @@ class World {
     final Map<Integer, Boomer> enemies = new HashMap<>(3);
     final List<Bomb> playerBombs = new ArrayList<>();
     final List<Bomb> enemyBombs = new ArrayList<>();
-    final Map<Position, Item> items = new HashMap<>();
     final Planner planner = new Planner();
 }
 
@@ -400,8 +400,20 @@ class Player {
             }
 
             calculateCellsUtility(ignoredCells);
-
             System.err.println(world.grid.showUtility());
+            final boolean[][] cells = calculateDangerousCells();
+            {
+                final int width = world.grid.width;
+                final int height = world.grid.height;
+                final StringBuilder sb = new StringBuilder(height * width);
+                for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
+                    for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
+                        sb.append(cells[columnIndex][rowIndex] ? '*' : '.');
+                    }
+                    sb.append("\n");
+                }
+                System.err.println(sb.toString());
+            }
 
             if (world.planner.isEmpty()) {
                 int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
@@ -511,7 +523,6 @@ class Player {
                         item.type = Item.Type.ExtraBomb;
                         world.grid.cells[x][y].type = Cell.Type.ExtraBomb;
                     }
-                    world.items.put(item.position, item);
                     break;
                 default:
                     break;
@@ -581,6 +592,40 @@ class Player {
                 }
             }
         }
+    }
+
+    void calculateExplosionAreaForBomb(Bomb bomb, boolean explosionMap[][]) {
+        final int width = world.grid.width;
+        final int height = world.grid.height;
+        final int columnMin = Math.max(bomb.position.x - bomb.explosionRange + 1, 0);
+        final int columnMax = Math.min(bomb.position.x + bomb.explosionRange - 1, width - 1);
+        final int rowMin = Math.max(bomb.position.y - bomb.explosionRange + 1, 0);
+        final int rowMax = Math.min(bomb.position.y + bomb.explosionRange - 1, height - 1);
+        for (int columnIndex = columnMin; columnIndex <= columnMax; ++columnIndex) {
+            explosionMap[columnIndex][bomb.position.y] = true;
+        }
+        for (int rowIndex = rowMin; rowIndex <= rowMax; ++rowIndex) {
+            explosionMap[bomb.position.x][rowIndex] = true;
+        }
+        bomb.dangerCalculated = true;
+    }
+
+    boolean[][] calculateDangerousCells() {
+        final int width = world.grid.width;
+        final int height = world.grid.height;
+//        for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
+//            for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
+//                final Cell cell =
+//            }
+//        }
+        boolean explosionMap[][] = new boolean[width][height];
+        final List<Bomb> bombs = new ArrayList<>(world.playerBombs.size() + world.enemyBombs.size());
+        bombs.addAll(world.playerBombs);
+        bombs.addAll(world.enemyBombs);
+        bombs.stream()
+                .filter(b -> b.timer == 1)
+                .forEach(b -> calculateExplosionAreaForBomb(b, explosionMap));
+        return explosionMap;
     }
 
     Set<Cell> getObjectsAffectedByExplosion(Position bombPosition, int bombRange, final Set<Position> ignoredCells, final EnumSet<Cell.Type> filter) {
