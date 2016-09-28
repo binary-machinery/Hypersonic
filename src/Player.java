@@ -116,7 +116,10 @@ class Cell {
     Position position;
     Type type = Type.Floor;
     int utility;
+    int distanceFromPlayer = Integer.MAX_VALUE;
+    Cell previousCell; // for pathfinding
     boolean utilityCalculated = false;
+    boolean pathCalculated = false;
 
     @Override
     public String toString() {
@@ -172,6 +175,17 @@ class Grid {
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
                 sb.append(cells[columnIndex][rowIndex].utility);
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    String showDistanceFromPlayer() {
+        final StringBuilder sb = new StringBuilder(height * width);
+        for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
+            for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
+                sb.append(cells[columnIndex][rowIndex].distanceFromPlayer == Integer.MAX_VALUE ? "." : cells[columnIndex][rowIndex].distanceFromPlayer);
             }
             sb.append("\n");
         }
@@ -431,18 +445,6 @@ class Player {
 
             world.planner.clearFinished();
 
-            final Set<Position> ignoredCells = new HashSet<>();
-            final DestroyedItemsModel destroyedItemsModel = new DestroyedItemsModel();
-            destroyedItemsModel.ignoredCells = ignoredCells;
-            destroyedItemsModel.filter = Cell.BOX_SUBTYPES;
-            for (Bomb bomb : world.allBombs) {
-                modelExplosionOfOneBomb(bomb, destroyedItemsModel, null);
-            }
-            world.allBombs.forEach(b -> ignoredCells.add(b.position));
-            destroyedItemsModel.destroyedObjects.forEach(cell -> ignoredCells.add(cell.position));
-
-            calculateCellsUtility(ignoredCells);
-            System.err.println(world.grid.showUtility());
             final int[][] explosionMap = calculateExplosionMap();
             {
                 final int width = world.grid.width;
@@ -460,6 +462,20 @@ class Player {
                 }
                 System.err.println(sb.toString());
             }
+
+            final Set<Position> ignoredCells = new HashSet<>();
+            final DestroyedItemsModel destroyedItemsModel = new DestroyedItemsModel();
+            destroyedItemsModel.ignoredCells = ignoredCells;
+            destroyedItemsModel.filter = Cell.BOX_SUBTYPES;
+            for (Bomb bomb : world.allBombs) {
+                modelExplosionOfOneBomb(bomb, destroyedItemsModel, null);
+            }
+            world.allBombs.forEach(b -> ignoredCells.add(b.position));
+            destroyedItemsModel.destroyedObjects.forEach(cell -> ignoredCells.add(cell.position));
+
+            calculateCellsUtilityAndNearestPaths(ignoredCells);
+            System.err.println(world.grid.showUtility());
+            System.err.println(world.grid.showDistanceFromPlayer());
 
             if (world.planner.isEmpty()) {
                 int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
@@ -623,47 +639,45 @@ class Player {
         }
     }
 
-    void calculateCellsUtility(final Set<Position> ignoredCells) {
-        final Queue<Cell> queue = new LinkedList<>();
+    void calculateCellsUtilityAndNearestPaths(final Set<Position> ignoredCells) {
+        final PriorityQueue<Cell> queue = new PriorityQueue<>(
+                world.grid.width * world.grid.height,
+                (Comparator<Cell>) (o1, o2) -> o1.distanceFromPlayer - o2.distanceFromPlayer
+        );
         final Cell cells[][] = world.grid.cells;
         final Cell start = cells[world.player.position.x][world.player.position.y];
+        start.distanceFromPlayer = 0;
         queue.add(start);
         while (!queue.isEmpty()) {
-            final Cell cell = queue.poll();
-            if (cell.utilityCalculated) {
-                continue;
+            final Cell currentCell = queue.poll();
+            System.err.println("Current cell: " + currentCell.position + " dst = " + currentCell.distanceFromPlayer);
+            if (!currentCell.utilityCalculated && !ignoredCells.contains(currentCell.position)) {
+                calculateUtilityForCell(currentCell, ignoredCells);
             }
-            if (!ignoredCells.contains(cell.position)) {
-                calculateUtilityForCell(cell, ignoredCells);
-            }
-            cell.utilityCalculated = true;
+            currentCell.utilityCalculated = true;
+            currentCell.pathCalculated = true;
 
             // add adjacent cells to queue
-            final Position pos = cell.position;
-            if (pos.x - 1 >= 0) {
-                final Cell adjacentCell = cells[pos.x - 1][pos.y];
-                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type) && !adjacentCell.utilityCalculated) {
-                    queue.add(adjacentCell);
-                }
-            }
-            if (pos.x + 1 < world.grid.width) {
-                final Cell adjacentCell = cells[pos.x + 1][pos.y];
-                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type) && !adjacentCell.utilityCalculated) {
-                    queue.add(adjacentCell);
-                }
-            }
-            if (pos.y - 1 >= 0) {
-                final Cell adjacentCell = cells[pos.x][pos.y - 1];
-                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type) && !adjacentCell.utilityCalculated) {
-                    queue.add(adjacentCell);
-                }
-            }
-            if (pos.y + 1 < world.grid.height) {
-                final Cell adjacentCell = cells[pos.x][pos.y + 1];
-                if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type) && !adjacentCell.utilityCalculated) {
-                    queue.add(adjacentCell);
-                }
-            }
+            final List<Position> adjacentPositions = generateAdjacentPositions(currentCell.position);
+            adjacentPositions
+                    .forEach(p -> {
+                        final Cell adjacentCell = cells[p.x][p.y];
+                        if (adjacentCell.pathCalculated) {
+                            return;
+                        }
+                        if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
+                            final int newDistance = currentCell.distanceFromPlayer + 1;
+                            if (newDistance < adjacentCell.distanceFromPlayer) {
+                                adjacentCell.distanceFromPlayer = newDistance;
+                                adjacentCell.previousCell = currentCell;
+                            }
+                            // remove and add -> force to recalculate priority
+                            if (queue.contains(adjacentCell)) { // O(n) :(
+                                queue.remove(adjacentCell); // O(n) :(
+                            }
+                            queue.add(adjacentCell);
+                        }
+                    });
         }
     }
 
