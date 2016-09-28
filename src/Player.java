@@ -450,7 +450,11 @@ class Player {
                 final StringBuilder sb = new StringBuilder(height * width);
                 for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
                     for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
-                        sb.append(explosionMap[columnIndex][rowIndex] == ExplosionMapModel.NO_EXPLOSION ? "." : explosionMap[columnIndex][rowIndex]);
+                        if (explosionMap[columnIndex][rowIndex] == ExplosionMapModel.NO_EXPLOSION) {
+                            sb.append(Cell.NONPASSABLE_SUBTYPES.contains(world.grid.cells[columnIndex][rowIndex].type) ? "X" : ".");
+                        } else {
+                            sb.append(explosionMap[columnIndex][rowIndex]);
+                        }
                     }
                     sb.append("\n");
                 }
