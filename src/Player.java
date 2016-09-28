@@ -124,6 +124,7 @@ class Cell {
     static EnumSet<Type> PASSABLE_SUBTYPES = EnumSet.of(Type.Floor, Type.ExtraRange, Type.ExtraBomb);
     static EnumSet<Type> NONPASSABLE_SUBTYPES = EnumSet.of(Type.Box, Type.BoxWithExtraRange, Type.BoxWithExtraBomb, Type.Wall, Type.Bomb);
     static EnumSet<Type> EXPLOSION_STOPPERS = EnumSet.of(Type.Box, Type.BoxWithExtraRange, Type.BoxWithExtraBomb, Type.Wall, Type.ExtraBomb, Type.ExtraRange, Type.Bomb);
+    static EnumSet<Type> DESTROYABLE_OBJECTS = EnumSet.of(Type.Box, Type.BoxWithExtraRange, Type.BoxWithExtraBomb, Type.ExtraBomb, Type.ExtraRange);
 
     Position position;
     Type type = Type.Floor;
@@ -457,14 +458,19 @@ class Player {
             calculateExplosionMap();
 
             final Set<Position> ignoredCells = new HashSet<>();
-            final DestroyedItemsModel destroyedItemsModel = new DestroyedItemsModel();
-            destroyedItemsModel.ignoredCells = ignoredCells;
-            destroyedItemsModel.filter = Cell.BOX_SUBTYPES;
+            final Set<Cell> destroyedObjects = new HashSet<>();
             for (Bomb bomb : world.allBombs) {
-                modelExplosionOfOneBomb(bomb, destroyedItemsModel, null);
+                destroyedObjects.addAll(
+                        calculateDestroyedObjects(
+                                bomb.position,
+                                bomb.explosionRange,
+                                Cell.DESTROYABLE_OBJECTS,
+                                ignoredCells
+                        )
+                );
             }
             world.allBombs.forEach(b -> ignoredCells.add(b.position));
-            destroyedItemsModel.destroyedObjects.forEach(cell -> ignoredCells.add(cell.position));
+            destroyedObjects.forEach(cell -> ignoredCells.add(cell.position));
 
             calculateCellsUtilityAndNearestPaths(ignoredCells);
 
@@ -601,11 +607,7 @@ class Player {
 
     void calculateUtilityForCell(final Cell cell, final Set<Position> ignoredCells) {
         if (Cell.PASSABLE_SUBTYPES.contains(cell.type)) {
-            final DestroyedItemsModel destroyedItemsModel = new DestroyedItemsModel();
-            destroyedItemsModel.ignoredCells = ignoredCells;
-            destroyedItemsModel.filter = Cell.BOX_SUBTYPES;
-            modelExplosionOfOneBomb(world.player.createBomb(cell.position), destroyedItemsModel, null);
-            final Set<Cell> boxes = destroyedItemsModel.destroyedObjects;
+            final Set<Cell> boxes = calculateDestroyedObjects(cell.position, world.player.explosionRange, Cell.BOX_SUBTYPES, ignoredCells);
             cell.utility = 0;
             boxes.forEach(c -> {
                 switch (c.type) {
@@ -695,26 +697,24 @@ class Player {
         }
     }
 
-    void modelExplosionOfOneBomb(
-            final Bomb bomb,
-            final DestroyedItemsModel destroyedItemsModel,
-            final Cell[][] explosionMap
+    Set<Cell> calculateDestroyedObjects(
+            final Position bombPosition,
+            final int explosionRange,
+            final EnumSet<Cell.Type> filter,
+            final Set<Position> ignoredCells
     ) {
         final int width = world.grid.width;
         final int height = world.grid.height;
 
-        if (explosionMap != null) {
-            checkExplosionWave(bomb, bomb.position);
-        }
-
+        final Set<Cell> destroyedObjects = new HashSet<>(4);
         final List<Position> directions = new ArrayList<>(4);
         directions.add(new Position(1, 0));
         directions.add(new Position(-1, 0));
         directions.add(new Position(0, 1));
         directions.add(new Position(0, -1));
         directions.forEach(dir -> {
-            int explosionRadius = bomb.explosionRange - 1;
-            Position pos = bomb.position;
+            int explosionRadius = explosionRange - 1;
+            Position pos = bombPosition;
             while (explosionRadius > 0) {
                 --explosionRadius;
                 pos = pos.add(dir);
@@ -722,17 +722,15 @@ class Player {
                     break; // end of map
                 }
                 final Cell cell = world.grid.cells[pos.x][pos.y];
-                if (destroyedItemsModel != null) {
-                    destroyedItemsModel.checkExplosionWave(cell);
-                }
-                if (explosionMap != null) {
-                    checkExplosionWave(bomb, cell.position);
+                if (filter.contains(cell.type) && !ignoredCells.contains(cell.position)) {
+                    destroyedObjects.add(cell);
                 }
                 if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
                     break;
                 }
             }
         });
+        return destroyedObjects;
     }
 
     void calculateExplosionMapForBomb(Bomb bomb) {
