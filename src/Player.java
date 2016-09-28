@@ -683,7 +683,7 @@ class Player {
         final List<Bomb> bombs = world.allBombs;
         bombs.stream()
                 .sorted((o1, o2) -> o1.timer - o2.timer)
-                .forEach(b -> modelExplosionOfOneBomb(b, null, world.grid.cells));
+                .forEach(this::calculateExplosionMapForBomb);
     }
 
     void checkExplosionWave(Bomb bomb, Position position) {
@@ -728,6 +728,31 @@ class Player {
                 if (explosionMap != null) {
                     checkExplosionWave(bomb, cell.position);
                 }
+                if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
+                    break;
+                }
+            }
+        });
+    }
+
+    void calculateExplosionMapForBomb(Bomb bomb) {
+        checkExplosionWave(bomb, bomb.position);
+        final List<Position> directions = new ArrayList<>(4);
+        directions.add(new Position(1, 0));
+        directions.add(new Position(-1, 0));
+        directions.add(new Position(0, 1));
+        directions.add(new Position(0, -1));
+        directions.forEach(dir -> {
+            int explosionRadius = bomb.explosionRange - 1;
+            Position pos = bomb.position;
+            while (explosionRadius > 0) {
+                --explosionRadius;
+                pos = pos.add(dir);
+                if ((pos.x < 0) || (pos.y < 0) || (pos.x >= world.grid.width) || (pos.y >= world.grid.height)) {
+                    break; // end of map
+                }
+                final Cell cell = world.grid.cells[pos.x][pos.y];
+                checkExplosionWave(bomb, cell.position);
                 if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
                     break;
                 }
