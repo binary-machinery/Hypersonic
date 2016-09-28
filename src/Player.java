@@ -55,6 +55,14 @@ class Boomer {
     public String toString() {
         return "Boomer {" + position + "," + bombsAvailable + "," + explosionRange + "}";
     }
+
+    Bomb createBomb(Position position) {
+        Bomb b = new Bomb();
+        b.position = position;
+        b.timer = Bomb.COUNTDOWN;
+        b.explosionRange = explosionRange;
+        return b;
+    }
 }
 
 class Bomb {
@@ -68,7 +76,6 @@ class Bomb {
     Position position = new Position(0, 0);
     int timer;
     int explosionRange;
-    boolean dangerCalculated = false;
 
     @Override
     public String toString() {
@@ -594,7 +601,11 @@ class Player {
 
     void calculateUtilityForCell(final Cell cell, final Set<Position> ignoredCells) {
         if (Cell.PASSABLE_SUBTYPES.contains(cell.type)) {
-            final Set<Cell> boxes = getBoxesAffectedByExplosion(cell.position, world.player.explosionRange - 1, ignoredCells);
+            final DestroyedItemsModel destroyedItemsModel = new DestroyedItemsModel();
+            destroyedItemsModel.ignoredCells = ignoredCells;
+            destroyedItemsModel.filter = Cell.BOX_SUBTYPES;
+            modelExplosionOfOneBomb(world.player.createBomb(cell.position), destroyedItemsModel, null);
+            final Set<Cell> boxes = destroyedItemsModel.destroyedObjects;
             cell.utility = 0;
             boxes.forEach(c -> {
                 switch (c.type) {
@@ -669,8 +680,6 @@ class Player {
     }
 
     void calculateExplosionMap() {
-        final int width = world.grid.width;
-        final int height = world.grid.height;
         final List<Bomb> bombs = world.allBombs;
         bombs.stream()
                 .sorted((o1, o2) -> o1.timer - o2.timer)
@@ -724,70 +733,6 @@ class Player {
                 }
             }
         });
-    }
-
-    Set<Cell> getObjectsAffectedByExplosion(Position bombPosition, int bombRange, final Set<Position> ignoredCells, final EnumSet<Cell.Type> filter) {
-        final int width = world.grid.width;
-        final int height = world.grid.height;
-        final int explosionColumnLeft = Math.max(bombPosition.x - bombRange, 0);
-        final int explosionColumnRight = Math.min(bombPosition.x + bombRange, width - 1);
-        final int explosionRowTop = Math.max(bombPosition.y - bombRange, 0);
-        final int explosionRowBottom = Math.min(bombPosition.y + bombRange, height - 1);
-        final Set<Cell> boxes = new HashSet<>(4);
-        final boolean explosionMap[][] = new boolean[width][height];
-        for (int explosionColumnIndex = bombPosition.x - 1; explosionColumnIndex >= explosionColumnLeft; --explosionColumnIndex) {
-            final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
-            if (filter.contains(cell.type)) {
-                if (ignoredCells == null || !ignoredCells.contains(cell.position)) {
-                    boxes.add(cell);
-                }
-            }
-            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
-                break;
-            }
-        }
-        for (int explosionColumnIndex = bombPosition.x + 1; explosionColumnIndex <= explosionColumnRight; ++explosionColumnIndex) {
-            final Cell cell = world.grid.cells[explosionColumnIndex][bombPosition.y];
-            if (filter.contains(cell.type)) {
-                if (ignoredCells == null || !ignoredCells.contains(cell.position)) {
-                    boxes.add(cell);
-                }
-            }
-            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
-                break;
-            }
-        }
-        for (int explosionRowIndex = bombPosition.y - 1; explosionRowIndex >= explosionRowTop; --explosionRowIndex) {
-            final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
-            if (filter.contains(cell.type)) {
-                if (ignoredCells == null || !ignoredCells.contains(cell.position)) {
-                    boxes.add(cell);
-                }
-            }
-            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
-                break;
-            }
-        }
-        for (int explosionRowIndex = bombPosition.y + 1; explosionRowIndex <= explosionRowBottom; ++explosionRowIndex) {
-            final Cell cell = world.grid.cells[bombPosition.x][explosionRowIndex];
-            if (filter.contains(cell.type)) {
-                if (ignoredCells == null || !ignoredCells.contains(cell.position)) {
-                    boxes.add(cell);
-                }
-            }
-            if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
-                break;
-            }
-        }
-        return boxes;
-    }
-
-    Set<Cell> getBoxesAffectedByExplosion(Position bombPosition, int bombRange, final Set<Position> ignoredCells) {
-        return getObjectsAffectedByExplosion(bombPosition, bombRange, ignoredCells, Cell.BOX_SUBTYPES);
-    }
-
-    Set<Cell> getItemsAffectedByExplosion(Position bombPosition, int bombRange, final Set<Position> ignoredCells) {
-        return getObjectsAffectedByExplosion(bombPosition, bombRange, ignoredCells, Cell.BONUS_SUBTYPES);
     }
 
     Target findNearestCellWithHighestUtility(int scanRange, final Set<Position> ignoredCells) {
