@@ -140,7 +140,7 @@ class Cell {
 
     @Override
     public String toString() {
-        return "" + type.symbol;
+        return "" + position + ", " + type;
     }
 
     @Override
@@ -175,6 +175,7 @@ class Grid {
 
     void clear() {
         cells = new Cell[width][height];
+        asList = new ArrayList<>(width * height);
     }
 
     String showTypes() {
@@ -531,7 +532,7 @@ class Player {
             System.err.println(world.grid.showUtility());
             System.err.println(world.grid.showDistanceFromPlayer());
             System.err.println(world.grid.showExplosionMap());
-            System.err.println("Safety cell: " + safetyCell.position);
+            System.err.println("Safety cell: " + safetyCell);
             System.err.println(world.planner);
 
             world.planner.executeNext();
@@ -542,7 +543,6 @@ class Player {
         world.grid.width = in.nextInt();
         world.grid.height = in.nextInt();
         world.grid.clear();
-        world.grid.asList = new ArrayList<>(world.grid.width * world.grid.height);
         world.player.id = in.nextInt();
         in.nextLine();
     }
@@ -834,8 +834,10 @@ class Player {
     }
 
     Cell getNearestSafetyCell() {
+        System.err.println("Cell count: " + world.grid.asList.size());
         return world.grid.asList.stream()
                 .filter(c -> c.timerToExplosion == Bomb.NO_EXPLOSION)
+                .filter(c -> Cell.PASSABLE_SUBTYPES.contains(c.type))
                 .sorted(Cell.distanceComparator)
                 .findFirst()
                 .orElse(null);
