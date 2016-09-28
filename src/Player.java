@@ -134,6 +134,7 @@ class Cell {
     boolean utilityCalculated = false;
     boolean pathCalculated = false;
     int timerToExplosion = 0;
+    int safety = 0;
 
     static final Comparator<Cell> distanceComparator = (o1, o2) -> o1.distanceFromPlayer - o2.distanceFromPlayer;
     static final Comparator<Cell> utilityComparator = (o1, o2) -> o1.utility - o2.utility;
@@ -219,6 +220,22 @@ class Grid {
                     sb.append(Cell.NONPASSABLE_SUBTYPES.contains(cells[columnIndex][rowIndex].type) ? "X" : ".");
                 } else {
                     sb.append(cells[columnIndex][rowIndex].timerToExplosion);
+                }
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    String showSafetyMap() {
+        final StringBuilder sb = new StringBuilder(height * width);
+        for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
+            for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
+                final Cell cell = cells[columnIndex][rowIndex];
+                if ((cell.distanceFromPlayer == Integer.MAX_VALUE) || Cell.NONPASSABLE_SUBTYPES.contains(cell.type)) {
+                    sb.append('X');
+                } else {
+                    sb.append(cell.safety);
                 }
             }
             sb.append("\n");
@@ -371,18 +388,6 @@ class PlaceBomb extends Action {
     }
 }
 
-class DestroyedItemsModel {
-    EnumSet<Cell.Type> filter;
-    Set<Cell> destroyedObjects = new HashSet<>();
-    Set<Position> ignoredCells;
-
-    void checkExplosionWave(Cell cell) {
-        if (filter.contains(cell.type) && !ignoredCells.contains(cell.position)) {
-            destroyedObjects.add(cell);
-        }
-    }
-}
-
 class Planner {
     private final PriorityQueue<Action> actions = new PriorityQueue<>(10);
     private int orderCounter;
@@ -439,9 +444,11 @@ class Planner {
 
 class TimeCalculator {
     private long value;
+
     void start() {
         value = System.nanoTime();
     }
+
     double getTime_ms() {
         double ms = (System.nanoTime() - value) / 1000000.0;
         value = System.nanoTime();
@@ -493,6 +500,10 @@ class Player {
             System.err.println("Model destroyed objects: " + timeCalculator.getTime_ms() + " ms");
 
             calculateCellsUtilityAndNearestPaths(ignoredCells);
+            System.err.println("Utility and paths: " + timeCalculator.getTime_ms() + " ms");
+
+            calculateSafetyMap();
+            System.err.println("Safety map: " + timeCalculator.getTime_ms() + " ms");
 
             final Cell safetyCell = getNearestSafetyCell();
             System.err.println("Find safety cell: " + timeCalculator.getTime_ms() + " ms");
@@ -528,10 +539,10 @@ class Player {
             checkExplosionsAndDodge();
             System.err.println("Check explosions and dodge: " + timeCalculator.getTime_ms() + " ms");
 
-
             System.err.println(world.grid.showUtility());
             System.err.println(world.grid.showDistanceFromPlayer());
             System.err.println(world.grid.showExplosionMap());
+            System.err.println(world.grid.showSafetyMap());
             System.err.println("Safety cell: " + safetyCell);
             System.err.println(world.planner);
 
@@ -649,6 +660,9 @@ class Player {
                         break;
                 }
             });
+            if (cell.timerToExplosion != Bomb.NO_EXPLOSION) {
+                cell.utility -= Math.max(0, 5 - cell.timerToExplosion);
+            }
 //            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position);
 //            cell.utility += (int) adjacentPositions
 //                    .stream()
@@ -663,6 +677,7 @@ class Player {
             final int distanceToBonus = calculateDistance(world.player.position, cell.position);
             cell.utility = Math.max(6 - distanceToBonus, 0);
         }
+        cell.utility = Math.max(0, cell.utility);
     }
 
     void calculateCellsUtilityAndNearestPaths(final Set<Position> ignoredCells) {
@@ -720,6 +735,16 @@ class Player {
         if (previousValue == Bomb.NO_EXPLOSION || previousValue > timer) {
             world.grid.cells[position.x][position.y].timerToExplosion = timer;
         }
+    }
+
+    void calculateSafetyMap() {
+        world.grid.asList.forEach(cell -> {
+            if (cell.timerToExplosion == Bomb.NO_EXPLOSION) {
+                cell.safety = Bomb.NO_EXPLOSION;
+            } else {
+                cell.safety = Math.max(0, cell.timerToExplosion - cell.distanceFromPlayer);
+            }
+        });
     }
 
     Set<Cell> calculateDestroyedObjects(
