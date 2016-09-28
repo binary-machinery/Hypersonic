@@ -607,19 +607,19 @@ class Player {
                         break;
                 }
             });
-            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position);
-            cell.utility += (int) adjacentPositions
-                    .stream()
-                    .map(p -> world.grid.cells[p.x][p.y].type)
-                    .filter(t -> Cell.PASSABLE_SUBTYPES.contains(t))
-                    .count();
+//            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position);
+//            cell.utility += (int) adjacentPositions
+//                    .stream()
+//                    .map(p -> world.grid.cells[p.x][p.y].type)
+//                    .filter(t -> Cell.PASSABLE_SUBTYPES.contains(t))
+//                    .count();
         }
         if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
             if (ignoredCells.contains(cell.position)) {
                 return;
             }
             final int distanceToBonus = calculateDistance(world.player.position, cell.position);
-            cell.utility = Math.max(8 - distanceToBonus, 0);
+            cell.utility = Math.max(6 - distanceToBonus, 0);
         }
     }
 
