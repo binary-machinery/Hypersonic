@@ -306,7 +306,9 @@ class Move extends Action {
 }
 
 class SkipTurn extends Action {
+
     private Boomer player;
+    private boolean done = false;
 
     SkipTurn(Boomer player) {
         this.player = player;
@@ -316,6 +318,7 @@ class SkipTurn extends Action {
     @Override
     void execute() {
         System.out.println("MOVE " + player.position.x + " " + player.position.y);
+        done = true;
     }
 
     @Override
@@ -325,7 +328,7 @@ class SkipTurn extends Action {
 
     @Override
     boolean checkPostconditions() {
-        return true;
+        return done;
     }
 
     @Override
@@ -368,6 +371,37 @@ class PlaceBomb extends Action {
     @Override
     public String toString() {
         return "PlaceBomb " + targetPosition;
+    }
+}
+
+class PlaceBombAndGoTo extends Action {
+
+    private Position target;
+    private boolean done = false;
+
+    PlaceBombAndGoTo(Position target) {
+        this.target = target;
+    }
+
+    @Override
+    void execute() {
+        System.out.println("BOMB " + target.x + " " + target.y);
+        done = true;
+    }
+
+    @Override
+    boolean checkPreconditions() {
+        return true;
+    }
+
+    @Override
+    boolean checkPostconditions() {
+        return done;
+    }
+
+    @Override
+    public String toString() {
+        return "PlaceBombAndGoTo " + target;
     }
 }
 
@@ -453,18 +487,18 @@ class Player {
 
     void run() {
         // game loop
-        TimeCalculator timeCalculator = new TimeCalculator();
+//        TimeCalculator timeCalculator = new TimeCalculator();
         while (true) {
-            timeCalculator.start();
+//            timeCalculator.start();
             updateWorldState();
-            System.err.println("Update world: " + timeCalculator.getTime_ms() + " ms");
+//            System.err.println("Update world: " + timeCalculator.getTime_ms() + " ms");
 
             in.nextLine();
 
             world.planner.clearFinished();
 
             calculateExplosionMap(world.allBombs);
-            System.err.println("Explosion map: " + timeCalculator.getTime_ms() + " ms");
+//            System.err.println("Explosion map: " + timeCalculator.getTime_ms() + " ms");
 
             final Set<Position> ignoredCells = new HashSet<>();
             final Set<Cell> destroyedObjects = new HashSet<>();
@@ -480,53 +514,44 @@ class Player {
             }
             world.allBombs.forEach(b -> ignoredCells.add(b.position));
             destroyedObjects.forEach(cell -> ignoredCells.add(cell.position));
-            System.err.println("Model destroyed objects: " + timeCalculator.getTime_ms() + " ms");
+//            System.err.println("Model destroyed objects: " + timeCalculator.getTime_ms() + " ms");
 
             calculateCellsUtilityAndNearestPaths(ignoredCells);
-            System.err.println("Utility and paths: " + timeCalculator.getTime_ms() + " ms");
+//            System.err.println("Utility and paths: " + timeCalculator.getTime_ms() + " ms");
 
             calculateSafetyMap();
-            System.err.println("Safety map: " + timeCalculator.getTime_ms() + " ms");
+//            System.err.println("Safety map: " + timeCalculator.getTime_ms() + " ms");
 
-            Cell safetyCell;
-            Cell targetCell;
-            do {
-                System.err.println(world.grid.showUtility());
+            Cell targetCell = null;
+            while (true) {
                 targetCell = findNearestCellWithHighestUtility(4, ignoredCells);
-                System.err.println("Target cell: " + targetCell);
-                if (targetCell == null) {
-                    world.planner.add(new SkipTurn(world.player));
-                    break;
-                } else {
-
-                    final List<Cell> path = getPathTo(targetCell);
-
-                    if (path.isEmpty()) {
-                        System.err.println("Path is empty");
+                if (targetCell != null) {
+                    if (targetCell.position.equals(world.player.position)) {
                         modelNewBomb(world.player.createBomb(world.player.position));
-                        safetyCell = findNearestSafetyCell();
+                        final Cell safetyCell = findNearestSafetyCell();
                         if (safetyCell == null) {
                             targetCell.utility = 0;
+                            continue;
                         } else {
-                            world.planner.add(new PlaceBomb(targetCell.position, world.player));
+                            world.planner.add(new PlaceBombAndGoTo(targetCell.position));
+                            break;
                         }
                     } else {
-                        final Cell targetCellForClosure = targetCell;
-                        path.forEach(c -> {
-                            if (c.position.equals(targetCellForClosure.position)) {
-                                world.planner.add(new PlaceBomb(c.position, world.player));
-                            } else {
-                                world.planner.add(new Move(c.position, world.player));
-                            }
-                        });
+                        final List<Cell> path = getPathTo(targetCell);
+                        path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
+                        world.planner.add(new PlaceBombAndGoTo(targetCell.position));
                         break;
                     }
+                } else {
+                    world.planner.add(new SkipTurn(world.player));
+                    break;
                 }
-            } while (safetyCell == null);
+            }
+            if (world.planner.isEmpty()) {
+                world.planner.add(new SkipTurn(world.player));
+            }
 
-
-
-//            checkExplosionsAndDodge();
+            checkExplosionsAndDodge();
 //            System.err.println("Check explosions and dodge: " + timeCalculator.getTime_ms() + " ms");
 //
 //            System.err.println(world.grid.showUtility());
