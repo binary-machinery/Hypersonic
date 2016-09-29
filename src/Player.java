@@ -134,7 +134,7 @@ class Cell {
     boolean utilityCalculated = false;
     boolean pathCalculated = false;
     int timerToExplosion = 0;
-    int safety = 0;
+    int safety = Bomb.ALREADY_EXPLODED;
 
     static final Comparator<Cell> distanceComparator = (o1, o2) -> o1.distanceFromPlayer - o2.distanceFromPlayer;
     static final Comparator<Cell> utilityComparator = (o1, o2) -> o1.utility - o2.utility;
@@ -235,11 +235,7 @@ class Grid {
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
                 final Cell cell = cells[columnIndex][rowIndex];
-                if ((cell.distanceFromPlayer == Integer.MAX_VALUE) || Cell.NONPASSABLE_SUBTYPES.contains(cell.type)) {
-                    sb.append('X');
-                } else {
-                    sb.append(cell.safety);
-                }
+                sb.append(cell.safety);
             }
             sb.append("\n");
         }
@@ -522,7 +518,7 @@ class Player {
             calculateCellsUtilityAndNearestPaths(ignoredCells);
 //            System.err.println("Utility and paths: " + timeCalculator.getTime_ms() + " ms");
 
-            calculateSafetyMap();
+//            calculateSafetyMap();
 //            System.err.println("Safety map: " + timeCalculator.getTime_ms() + " ms");
 
             if (world.planner.isEmpty()) {
@@ -545,11 +541,9 @@ class Player {
                     System.err.println("Empty target!");
                     world.planner.add(new SkipTurn(world.player));
                 } else {
-                    if (target.type == Cell.Type.Floor) {
-                        world.planner.add(new PlaceBomb(target.position, world.player));
-                    } else {
-                        world.planner.add(new Move(target.position, world.player));
-                    }
+                    final List<Cell> path = getPathTo(target);
+                    path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
+                    world.planner.add(new PlaceBomb(target.position, world.player));
                 }
 //                System.err.println("Find target: " + timeCalculator.getTime_ms() + " ms");
             }
@@ -592,7 +586,6 @@ class Player {
             System.err.println(world.grid.showSafetyMap());
 //            System.err.println("Safety cell: " + safetyCell);
             System.err.println(world.planner);
-
 
             world.planner.executeNext();
         }
@@ -739,12 +732,17 @@ class Player {
         final Cell cells[][] = world.grid.cells;
         final Cell start = cells[world.player.position.x][world.player.position.y];
         start.distanceFromPlayer = 0;
+        start.safety = start.timerToExplosion;
         queue.add(start);
         while (!queue.isEmpty()) {
             final Cell currentCell = queue.poll();
             if (!currentCell.utilityCalculated && !ignoredCells.contains(currentCell.position)) {
                 calculateUtilityForCell(currentCell, ignoredCells);
             }
+            if (currentCell.timerToExplosion != Bomb.NO_EXPLOSION) {
+                currentCell.safety = currentCell.timerToExplosion - currentCell.distanceFromPlayer;
+            }
+
             currentCell.utilityCalculated = true;
             currentCell.pathCalculated = true;
 
@@ -761,11 +759,17 @@ class Player {
                             if ((adjacentCell.timerToExplosion != Bomb.NO_EXPLOSION)
                                     && (adjacentCell.timerToExplosion - newDistance) == Bomb.ALREADY_EXPLODED) {
                                 // player will be dead if go this way, ignore it
+                                adjacentCell.safety = Bomb.ALREADY_EXPLODED;
                                 return;
                             }
                             if (newDistance < adjacentCell.distanceFromPlayer) {
                                 adjacentCell.distanceFromPlayer = newDistance;
                                 adjacentCell.previousCell = currentCell;
+                                if (adjacentCell.timerToExplosion == Bomb.NO_EXPLOSION) {
+                                    adjacentCell.safety = Bomb.NO_EXPLOSION;
+                                } else {
+                                    adjacentCell.safety = Math.max(0, adjacentCell.timerToExplosion - newDistance);
+                                }
                             }
                             // remove and add -> force to recalculate priority
                             if (queue.contains(adjacentCell)) { // O(n) :(
@@ -792,15 +796,15 @@ class Player {
         }
     }
 
-    void calculateSafetyMap() {
-        world.grid.asList.forEach(cell -> {
-            if (cell.timerToExplosion == Bomb.NO_EXPLOSION) {
-                cell.safety = Bomb.NO_EXPLOSION;
-            } else {
-                cell.safety = Math.max(1, cell.timerToExplosion - cell.distanceFromPlayer);
-            }
-        });
-    }
+//    void calculateSafetyMap() {
+//        world.grid.asList.forEach(cell -> {
+//            if (cell.timerToExplosion == Bomb.NO_EXPLOSION) {
+//                cell.safety = Bomb.NO_EXPLOSION;
+//            } else {
+//                cell.safety = Math.max(1, cell.timerToExplosion - cell.distanceFromPlayer);
+//            }
+//        });
+//    }
 
     Set<Cell> calculateDestroyedObjects(
             final Position bombPosition,
@@ -871,14 +875,14 @@ class Player {
                 .orElse(null);
     }
 
-    Cell findNearestSafetyCell() {
-        return world.grid.asList.stream()
-                .filter(c -> c.timerToExplosion == Bomb.NO_EXPLOSION)
-                .filter(c -> c.distanceFromPlayer != Integer.MAX_VALUE)
-                .sorted(Cell.distanceComparator)
-                .findFirst()
-                .orElse(null);
-    }
+//    Cell findNearestSafetyCell() {
+//        return world.grid.asList.stream()
+//                .filter(c -> c.timerToExplosion == Bomb.NO_EXPLOSION)
+//                .filter(c -> c.distanceFromPlayer != Integer.MAX_VALUE)
+//                .sorted(Cell.distanceComparator)
+//                .findFirst()
+//                .orElse(null);
+//    }
 
     void checkExplosionsAndDodge() {
         final Position playerPos = world.player.position;
