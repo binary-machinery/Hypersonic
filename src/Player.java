@@ -388,6 +388,7 @@ class PlaceBombAndGoTo extends Action {
     private boolean done = false;
 
     PlaceBombAndGoTo(Position target) {
+        this.priority = 5;
         this.target = target;
     }
 
@@ -603,7 +604,7 @@ class Player {
 //            System.err.println(world.grid.showExplosionMap());
 //            System.err.println(world.grid.showSafetyMap());
 //            System.err.println("Safety cell: " + safetyCell);
-//            System.err.println(world.planner);
+            System.err.println(world.planner);
 
             world.planner.executeNext();
         }
