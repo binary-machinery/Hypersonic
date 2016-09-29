@@ -520,71 +520,78 @@ class Player {
 //            calculateSafetyMap();
 //            System.err.println("Safety map: " + timeCalculator.getTime_ms() + " ms");
 
-            if (world.planner.isEmpty()) {
-                int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
-//                int scanRange = 50; // unlimited
-                Cell target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
-//                if (target == null) {
-//                    System.err.println("Nothing found");
-//                    scanRange *= 2;
-//                    System.err.println("Scan range = " + scanRange);
-//                    target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
-//                }
-//                if (target == null) {
-//                    System.err.println("Nothing found");
-//                    scanRange = 50;
-//                    System.err.println("Scan range = " + scanRange);
-//                    target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
-//                }
-                if (target == null) {
-                    System.err.println("Empty target!");
-                    world.planner.add(new SkipTurn(world.player));
-                } else {
-                    final List<Cell> path = getPathTo(target);
-                    path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
-                    world.planner.add(new PlaceBomb(target.position, world.player));
-                }
-//                System.err.println("Find target: " + timeCalculator.getTime_ms() + " ms");
-            }
-
-//            Cell targetCell = null;
-//            while (true) {
-//                targetCell = findNearestCellWithHighestUtility(4, ignoredCells);
-//                if (targetCell != null) {
-//                    if (targetCell.position.equals(world.player.position)) {
-//                        modelNewBomb(world.player.createBomb(world.player.position));
-//                        final Cell safetyCell = findNearestSafetyCell();
-//                        if (safetyCell == null) {
-//                            targetCell.utility = 0;
-//                            continue;
-//                        } else {
-//                            world.planner.add(new PlaceBombAndGoTo(targetCell.position));
-//                            break;
-//                        }
-//                    } else {
-//                        final List<Cell> path = getPathTo(targetCell);
-//                        path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
-//                        world.planner.add(new PlaceBombAndGoTo(targetCell.position));
-//                        break;
-//                    }
-//                } else {
-//                    world.planner.add(new SkipTurn(world.player));
-//                    break;
-//                }
-//            }
 //            if (world.planner.isEmpty()) {
-//                world.planner.add(new SkipTurn(world.player));
+//                int scanRange = (world.player.bombsAvailable > 0) ? Bomb.COUNTDOWN / 2 : Bomb.COUNTDOWN;
+////                int scanRange = 50; // unlimited
+//                Cell target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
+////                if (target == null) {
+////                    System.err.println("Nothing found");
+////                    scanRange *= 2;
+////                    System.err.println("Scan range = " + scanRange);
+////                    target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
+////                }
+////                if (target == null) {
+////                    System.err.println("Nothing found");
+////                    scanRange = 50;
+////                    System.err.println("Scan range = " + scanRange);
+////                    target = findNearestCellWithHighestUtility(scanRange, ignoredCells);
+////                }
+//                if (target == null) {
+//                    System.err.println("Empty target!");
+//                    world.planner.add(new SkipTurn(world.player));
+//                } else {
+//                    final List<Cell> path = getPathTo(target);
+//                    path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
+//                    world.planner.add(new PlaceBomb(target.position, world.player));
+//                }
+////                System.err.println("Find target: " + timeCalculator.getTime_ms() + " ms");
 //            }
+
+            System.err.println("Original");
+            System.err.println(world.grid.showSafetyMap());
+            Cell targetCell = null;
+            int modelIterationCount = 3;
+            while (modelIterationCount-- > 0) {
+                targetCell = findNearestCellWithHighestUtility(4, ignoredCells);
+                System.err.println("Target cell: " + targetCell);
+                if (targetCell != null) {
+                    if (targetCell.position.equals(world.player.position)) {
+                        modelNewBomb(world.player.createBomb(world.player.position), ignoredCells);
+                        System.err.println("=================================");
+                        System.err.println(world.grid.showExplosionMap());
+                        System.err.println(world.grid.showDistanceFromPlayer());
+                        System.err.println(world.grid.showSafetyMap());
+                        if (isCellWithoutExplosionExists() && !isSafetyMapIsEmpty()) {
+                            world.planner.add(new PlaceBombAndGoTo(targetCell.position));
+                            break;
+                        } else {
+                            System.err.println("No safety");
+                            targetCell.utility = 0;
+                        }
+                    } else {
+                        final List<Cell> path = getPathTo(targetCell);
+                        path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
+                        world.planner.add(new PlaceBombAndGoTo(targetCell.position));
+                        break;
+                    }
+                } else {
+                    world.planner.add(new SkipTurn(world.player));
+                    break;
+                }
+            }
+            if (world.planner.isEmpty()) {
+                world.planner.add(new SkipTurn(world.player));
+            }
 
             checkExplosionsAndDodge();
 //            System.err.println("Check explosions and dodge: " + timeCalculator.getTime_ms() + " ms");
 //
-            System.err.println(world.grid.showUtility());
-            System.err.println(world.grid.showDistanceFromPlayer());
+//            System.err.println(world.grid.showUtility());
+//            System.err.println(world.grid.showDistanceFromPlayer());
 //            System.err.println(world.grid.showExplosionMap());
-            System.err.println(world.grid.showSafetyMap());
+//            System.err.println(world.grid.showSafetyMap());
 //            System.err.println("Safety cell: " + safetyCell);
-            System.err.println(world.planner);
+//            System.err.println(world.planner);
 
             world.planner.executeNext();
         }
@@ -896,25 +903,25 @@ class Player {
             final Move dodge = new Move(dodgeCell.position, world.player);
             dodge.priority = 0;
             world.planner.add(dodge);
+        } else {
+            adjacentPositions
+                    .stream()
+                    .filter(p -> cells[p.x][p.y].safety == Bomb.EXPLODE_NEXT_TURN)
+                    .findAny()
+                    .ifPresent(c -> {
+                        final SkipTurn skip = new SkipTurn(world.player);
+                        skip.priority = 0;
+                        world.planner.add(skip);
+                    });
         }
-//        else {
-//            final long dangerousCells = adjacentPositions
-//                    .stream()
-//                    .filter(p -> cells[p.x][p.y].safety == Bomb.EXPLODE_NEXT_TURN)
-//                    .count();
-//            if (dangerousCells > 0) {
-//                final SkipTurn skip = new SkipTurn(world.player);
-//                skip.priority = 0;
-//                world.planner.add(skip);
-//            }
-//        }
     }
 
-    void modelNewBomb(Bomb bomb) {
+    void modelNewBomb(Bomb bomb, Set<Position> ignoredCells) {
         final List<Bomb> bombs = new ArrayList<>(world.allBombs.size() + 1);
         world.allBombs.forEach(bombs::add);
         bombs.add(bomb);
         calculateExplosionMap(bombs);
+        calculateCellsUtilityAndNearestPaths(ignoredCells);
     }
 
     List<Position> generateAdjacentPositions(Position center) {
@@ -947,5 +954,23 @@ class Player {
         } while (nextCell.previousCell != null);
         Collections.reverse(path);
         return path;
+    }
+
+    boolean isCellWithoutExplosionExists() {
+        return world.grid.asList
+                .stream()
+                .filter(c -> c.timerToExplosion == Bomb.NO_EXPLOSION)
+                .map(c -> true)
+                .findAny()
+                .orElse(false);
+    }
+
+    boolean isSafetyMapIsEmpty() {
+        return world.grid.asList
+                .stream()
+                .filter(c -> c.safety == Bomb.NO_EXPLOSION)
+                .map(c -> false)
+                .findAny()
+                .orElse(true);
     }
 }
