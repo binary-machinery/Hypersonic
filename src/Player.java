@@ -1,7 +1,5 @@
 import java.util.*;
 
-// TODO: improve dodging
-
 class Position {
     int x;
     int y;
@@ -138,6 +136,7 @@ class Cell {
 
     static final Comparator<Cell> distanceComparator = (o1, o2) -> o1.distanceFromPlayer - o2.distanceFromPlayer;
     static final Comparator<Cell> utilityComparator = (o1, o2) -> o1.utility - o2.utility;
+    static final Comparator<Cell> safetyComparator = (o1, o2) -> o1.safety - o2.safety;
 
     @Override
     public String toString() {
@@ -739,9 +738,6 @@ class Player {
             if (!currentCell.utilityCalculated && !ignoredCells.contains(currentCell.position)) {
                 calculateUtilityForCell(currentCell, ignoredCells);
             }
-            if (currentCell.timerToExplosion != Bomb.NO_EXPLOSION) {
-                currentCell.safety = currentCell.timerToExplosion - currentCell.distanceFromPlayer;
-            }
 
             currentCell.utilityCalculated = true;
             currentCell.pathCalculated = true;
@@ -888,28 +884,30 @@ class Player {
         final Position playerPos = world.player.position;
         final List<Position> adjacentPositions = generateAdjacentPositions(playerPos);
         final Cell[][] cells = world.grid.cells;
-        if (cells[playerPos.x][playerPos.y].timerToExplosion == Bomb.EXPLODE_NEXT_TURN) {
-            adjacentPositions
+        final Cell playersCell = cells[playerPos.x][playerPos.y];
+        if (playersCell.safety == Bomb.EXPLODE_NEXT_TURN) {
+            System.err.println("Player's position will explode next turn!");
+            final Cell dodgeCell = adjacentPositions
                     .stream()
-                    .filter(p -> cells[p.x][p.y].timerToExplosion == Bomb.NO_EXPLOSION)
-                    .filter(p -> Cell.PASSABLE_SUBTYPES.contains(world.grid.cells[p.x][p.y].type))
-                    .findAny()
-                    .ifPresent(p -> {
-                        final Move dodge = new Move(p, world.player);
-                        dodge.priority = 0;
-                        world.planner.add(dodge);
-                    });
-        } else {
-            final long dangerousCells = adjacentPositions
-                    .stream()
-                    .filter(p -> cells[p.x][p.y].timerToExplosion == Bomb.EXPLODE_NEXT_TURN)
-                    .count();
-            if (dangerousCells > 0) {
-                final SkipTurn skip = new SkipTurn(world.player);
-                skip.priority = 0;
-                world.planner.add(skip);
-            }
+                    .map(p -> cells[p.x][p.y])
+                    .max(Cell.safetyComparator)
+                    .orElse(playersCell);
+            System.err.println("Cell to dodge: " + dodgeCell);
+            final Move dodge = new Move(dodgeCell.position, world.player);
+            dodge.priority = 0;
+            world.planner.add(dodge);
         }
+//        else {
+//            final long dangerousCells = adjacentPositions
+//                    .stream()
+//                    .filter(p -> cells[p.x][p.y].safety == Bomb.EXPLODE_NEXT_TURN)
+//                    .count();
+//            if (dangerousCells > 0) {
+//                final SkipTurn skip = new SkipTurn(world.player);
+//                skip.priority = 0;
+//                world.planner.add(skip);
+//            }
+//        }
     }
 
     void modelNewBomb(Bomb bomb) {
@@ -917,16 +915,6 @@ class Player {
         world.allBombs.forEach(bombs::add);
         bombs.add(bomb);
         calculateExplosionMap(bombs);
-    }
-
-    int calculateDistance(int x1, int y1, int x2, int y2) {
-        // manhattan distance without obstacles
-        return Math.abs(x1 - x2) + Math.abs(y1 - y2);
-    }
-
-    int calculateDistance(Position pos1, Position pos2) {
-        // manhattan distance without obstacles
-        return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
     }
 
     List<Position> generateAdjacentPositions(Position center) {
