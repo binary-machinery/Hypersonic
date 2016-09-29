@@ -558,27 +558,18 @@ class Player {
 ////                System.err.println("Find target: " + timeCalculator.getTime_ms() + " ms");
 //            }
 
-            System.err.println("Original");
-            System.err.println(world.grid.showSafetyMap());
             Cell targetCell = null;
             int modelIterationCount = 3;
             while (modelIterationCount-- > 0) {
                 targetCell = findNearestCellWithHighestUtility(4, ignoredCells);
-                System.err.println("Target cell: " + targetCell);
                 if (targetCell != null) {
                     if (targetCell.position.equals(world.player.position)) {
                         world.grid.asList.forEach(Cell::reset);
                         modelNewBomb(world.player.createBomb(world.player.position), ignoredCells);
-                        System.err.println("=================================");
-                        System.err.println(world.grid.showExplosionMap());
-                        System.err.println(world.grid.showDistanceFromPlayer());
-                        System.err.println(world.grid.showSafetyMap());
                         if (!isSafetyMapIsEmpty()) {
-                            System.err.println("Safety map is ok");
                             world.planner.add(new PlaceBombAndGoTo(targetCell.position));
                             break;
                         } else {
-                            System.err.println("No safety");
                             targetCell.utility = 0;
                         }
                     } else {
