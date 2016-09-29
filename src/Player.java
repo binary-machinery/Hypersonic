@@ -205,7 +205,10 @@ class Grid {
         final StringBuilder sb = new StringBuilder(height * width);
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
-                sb.append(cells[columnIndex][rowIndex].distanceFromPlayer == Integer.MAX_VALUE ? "." : cells[columnIndex][rowIndex].distanceFromPlayer);
+                sb.append(
+                        (cells[columnIndex][rowIndex].distanceFromPlayer == Integer.MAX_VALUE)
+                                ? "."
+                                : Math.min(9, cells[columnIndex][rowIndex].distanceFromPlayer));
             }
             sb.append("\n");
         }
@@ -583,12 +586,12 @@ class Player {
             checkExplosionsAndDodge();
 //            System.err.println("Check explosions and dodge: " + timeCalculator.getTime_ms() + " ms");
 //
-//            System.err.println(world.grid.showUtility());
-////            System.err.println(world.grid.showDistanceFromPlayer());
+            System.err.println(world.grid.showUtility());
+            System.err.println(world.grid.showDistanceFromPlayer());
 //            System.err.println(world.grid.showExplosionMap());
-//            System.err.println(world.grid.showSafetyMap());
+            System.err.println(world.grid.showSafetyMap());
 //            System.err.println("Safety cell: " + safetyCell);
-//            System.err.println(world.planner);
+            System.err.println(world.planner);
 
 
             world.planner.executeNext();
