@@ -244,23 +244,6 @@ class Grid {
     }
 }
 
-class Target {
-    enum Type {
-        BombPlace,
-        Bonus
-    }
-
-    Position position;
-    int distance;
-    int utility;
-    Type type;
-
-    @Override
-    public String toString() {
-        return "Target {" + position + "," + distance + "," + utility + "," + type + "}";
-    }
-}
-
 class World {
     final Grid grid = new Grid();
     final Boomer player = new Boomer();
@@ -506,17 +489,16 @@ class Player {
             System.err.println("Safety map: " + timeCalculator.getTime_ms() + " ms");
 
             Cell safetyCell;
-            Target target;
+            Cell targetCell;
             do {
                 System.err.println(world.grid.showUtility());
-                target = findNearestCellWithHighestUtility(4, ignoredCells);
-                System.err.println("Target: " + target);
-                if (target == null) {
+                targetCell = findNearestCellWithHighestUtility(4, ignoredCells);
+                System.err.println("Target cell: " + targetCell);
+                if (targetCell == null) {
                     world.planner.add(new SkipTurn(world.player));
                     break;
                 } else {
-                    final Cell targetCell = world.grid.cells[target.position.x][target.position.y];
-                    System.err.println("Target cell: " + targetCell);
+
                     final List<Cell> path = getPathTo(targetCell);
 
                     if (path.isEmpty()) {
@@ -529,8 +511,9 @@ class Player {
                             world.planner.add(new PlaceBomb(targetCell.position, world.player));
                         }
                     } else {
+                        final Cell targetCellForClosure = targetCell;
                         path.forEach(c -> {
-                            if (c.position.equals(targetCell.position)) {
+                            if (c.position.equals(targetCellForClosure.position)) {
                                 world.planner.add(new PlaceBomb(c.position, world.player));
                             } else {
                                 world.planner.add(new Move(c.position, world.player));
@@ -540,6 +523,8 @@ class Player {
                     }
                 }
             } while (safetyCell == null);
+
+
 
 //            checkExplosionsAndDodge();
 //            System.err.println("Check explosions and dodge: " + timeCalculator.getTime_ms() + " ms");
@@ -821,54 +806,12 @@ class Player {
         });
     }
 
-    Target findNearestCellWithHighestUtility(int scanRange, final Set<Position> ignoredCells) {
-        final int width = world.grid.width;
-        final int height = world.grid.height;
-        final int playerX = world.player.position.x;
-        final int playerY = world.player.position.y;
-        final int columnDeltaMin = Math.max(-scanRange, 0 - playerX);
-        final int columnDeltaMax = Math.min(scanRange, width - 1 - playerX);
-        boolean targetFound = false;
-        int distanceToMax = 0;
-        Position positionOfMax = new Position(0, 0);
-        int max = 0;
-        for (int columnDelta = columnDeltaMin; columnDelta <= columnDeltaMax; ++columnDelta) {
-            final int columnIndex = playerX + columnDelta;
-            final int rowDeltaMin = Math.max(-scanRange + columnDelta, 0 - playerY);
-            final int rowDeltaMax = Math.min(scanRange - columnDelta, height - 1 - playerY);
-            for (int rowDelta = rowDeltaMin; rowDelta <= rowDeltaMax; ++rowDelta) {
-                final int rowIndex = playerY + rowDelta;
-                final Position currentPosition = new Position(columnIndex, rowIndex);
-                if (ignoredCells.contains(currentPosition)) {
-                    continue;
-                }
-                final int currentUtility = world.grid.cells[columnIndex][rowIndex].utility;
-                if (currentUtility < max) {
-                    continue;
-                }
-                final int currentDistance = calculateDistance(playerX, playerY, columnIndex, rowIndex);
-                if (currentUtility > max || (currentUtility == max && currentDistance < distanceToMax)) {
-                    positionOfMax = currentPosition;
-                    max = currentUtility;
-                    distanceToMax = currentDistance;
-                    targetFound = true;
-                }
-            }
-        }
-        if (targetFound) {
-            final Target target = new Target();
-            target.position = positionOfMax;
-            target.distance = distanceToMax;
-            target.utility = max;
-            if (Cell.BONUS_SUBTYPES.contains(world.grid.cells[target.position.x][target.position.y].type)) {
-                target.type = Target.Type.Bonus;
-            } else {
-                target.type = Target.Type.BombPlace;
-            }
-            return target;
-        } else {
-            return null;
-        }
+    Cell findNearestCellWithHighestUtility(int scanRange, final Set<Position> ignoredCells) {
+        return world.grid.asList.stream()
+                .filter(c -> c.distanceFromPlayer <= scanRange)
+                .filter(c -> !ignoredCells.contains(c.position))
+                .max(Cell.utilityComparator)
+                .orElse(null);
     }
 
     Cell findNearestSafetyCell() {
