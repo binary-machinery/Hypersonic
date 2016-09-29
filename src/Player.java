@@ -571,8 +571,6 @@ class Player {
             System.err.println(world.planner);
 
 
-
-
             world.planner.executeNext();
         }
     }
@@ -737,6 +735,11 @@ class Player {
                         }
                         if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
                             final int newDistance = currentCell.distanceFromPlayer + 1;
+                            if ((adjacentCell.timerToExplosion != Bomb.NO_EXPLOSION)
+                                    && (adjacentCell.timerToExplosion - newDistance) == Bomb.ALREADY_EXPLODED) {
+                                // player will be dead if go this way, ignore it
+                                return;
+                            }
                             if (newDistance < adjacentCell.distanceFromPlayer) {
                                 adjacentCell.distanceFromPlayer = newDistance;
                                 adjacentCell.previousCell = currentCell;
