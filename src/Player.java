@@ -536,7 +536,7 @@ class PlaceBombAndGoTo extends Action {
             System.out.println("BOMB " + target.x + " " + target.y);
             done = true;
         } else {
-            System.out.println("MOVE " + player.position.x + " " + player.position.y);
+            System.out.println("MOVE " + player.position.x + " " + player.position.y + " Wait for bomb");
         }
     }
 
@@ -688,7 +688,6 @@ class Player {
             );
             timeCalculator.showTime("Utility, paths and safety");
 
-            System.err.println(world.grid.showTypes(typeMap));
             System.err.println(world.grid.showUtility(utilityMap));
 
             if (world.planner.isEmpty()) {
@@ -764,8 +763,8 @@ class Player {
             timeCalculator.showTime("Check explosions and dodge");
 
             System.err.println(world.grid.showUtility(utilityMap));
-            System.err.println(world.grid.showDistanceFromPlayer(pathMap));
-            System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
+//            System.err.println(world.grid.showDistanceFromPlayer(pathMap));
+//            System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
             System.err.println(world.grid.showSafetyMap(safetyMap));
             System.err.println(world.planner);
 
@@ -1182,7 +1181,6 @@ class Player {
                 pathMap,
                 safetyMap
         );
-        System.err.println(world.grid.showSafetyMap(safetyMap));
     }
 
     List<Position> generateAdjacentPositions(final Position center, final EnumSet<Cell.Type> filter, final TypeMap typeMap) {
