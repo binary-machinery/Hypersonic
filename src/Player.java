@@ -544,6 +544,7 @@ class Planner {
 
 class TimeCalculator {
     private long value;
+    boolean enabled = true;
 
     void start() {
         value = System.nanoTime();
@@ -553,6 +554,12 @@ class TimeCalculator {
         double ms = (System.nanoTime() - value) / 1000000.0;
         value = System.nanoTime();
         return ms;
+    }
+
+    void showTime(String prefix) {
+        if (enabled) {
+            System.err.println(prefix + ": " + getTime_ms() + " ms");
+        }
     }
 }
 
@@ -571,10 +578,11 @@ class Player {
     void run() {
         // game loop
         final TimeCalculator timeCalculator = new TimeCalculator();
+        timeCalculator.enabled = false;
         while (true) {
             timeCalculator.start();
             updateWorldState();
-            System.err.println("Update world: " + timeCalculator.getTime_ms() + " ms");
+            timeCalculator.showTime("Update world");
 
             in.nextLine();
 
@@ -584,10 +592,10 @@ class Player {
             final PathMap pathMap = PathMap.createPathMap(world.grid.width, world.grid.height);
             final IntegerMap explosionMap = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
             final IntegerMap safetyMap = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
-            System.err.println("Maps allocation: " + timeCalculator.getTime_ms() + " ms");
+            timeCalculator.showTime("Maps allocation");
 
             calculateExplosionMap(world.allBombs, explosionMap);
-            System.err.println("Explosion map: " + timeCalculator.getTime_ms() + " ms");
+            timeCalculator.showTime("Explosion map");
 
             final Set<Position> ignoredCells = new HashSet<>();
             final Set<Cell> destroyedObjects = new HashSet<>();
@@ -603,10 +611,10 @@ class Player {
             }
             world.allBombs.forEach(b -> ignoredCells.add(b.position));
             destroyedObjects.forEach(cell -> ignoredCells.add(cell.position));
-            System.err.println("Model destroyed objects: " + timeCalculator.getTime_ms() + " ms");
+            timeCalculator.showTime("Model destroyed objects");
 
             calculateCellsUtilityAndPathsAndSafetyMap(ignoredCells, explosionMap, utilityMap, pathMap, safetyMap);
-            System.err.println("Utility, paths and safety: " + timeCalculator.getTime_ms() + " ms");
+            timeCalculator.showTime("Utility, paths and safety");
 
             if (world.planner.isEmpty()) {
                 Cell targetCell = null;
@@ -648,10 +656,10 @@ class Player {
             if (world.planner.isEmpty()) {
                 world.planner.add(new SkipTurn(world.player));
             }
-            System.err.println("Target search: " + timeCalculator.getTime_ms() + " ms");
+            timeCalculator.showTime("Target search");
 
             checkExplosionsAndDodge(safetyMap);
-            System.err.println("Check explosions and dodge: " + timeCalculator.getTime_ms() + " ms");
+            timeCalculator.showTime("Check explosions and dodge");
 
             System.err.println(world.grid.showUtility(utilityMap));
             System.err.println(world.grid.showDistanceFromPlayer(pathMap));
