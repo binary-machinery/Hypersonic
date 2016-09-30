@@ -804,13 +804,13 @@ class Player {
 //                    .filter(t -> Cell.PASSABLE_SUBTYPES.contains(t))
 //                    .count();
         }
-//        if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
-//            if (ignoredCells.contains(cell.position)) {
-//                return;
-//            }
+        if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
+            if (!ignoredCells.contains(cell.position)) {
+                utility.value += 1;
+            }
 //            final int distanceToBonus = calculateDistance(world.player.position, cell.position);
 //            utility.value = Math.max(6 - distanceToBonus, 0);
-//        }
+        }
         utility.value = Math.max(0, utility.value);
     }
 
