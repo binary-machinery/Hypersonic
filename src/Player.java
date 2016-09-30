@@ -263,7 +263,12 @@ class World {
 }
 
 abstract class Action implements Comparable<Action> {
-    int priority;
+
+    static final int LOW_PRIORITY = 3;
+    static final int NORMAL_PRIORITY = 2;
+    static final int HIGH_PRIORITY = 1;
+
+    int priority = NORMAL_PRIORITY;
     int order;
 
     @Override
@@ -289,7 +294,6 @@ class Move extends Action {
     Move(Position targetPosition, Boomer player) {
         this.player = player;
         this.targetPosition = targetPosition;
-        priority = 5;
     }
 
     @Override
@@ -320,7 +324,6 @@ class SkipTurn extends Action {
 
     SkipTurn(Boomer player) {
         this.player = player;
-        priority = 5;
     }
 
     @Override
@@ -353,7 +356,6 @@ class PlaceBomb extends Action {
     PlaceBomb(Position targetPosition, Boomer player) {
         this.player = player;
         this.targetPosition = targetPosition;
-        priority = 5;
     }
 
     @Override
@@ -388,7 +390,6 @@ class PlaceBombAndGoTo extends Action {
     private boolean done = false;
 
     PlaceBombAndGoTo(Position target) {
-        this.priority = 5;
         this.target = target;
     }
 
@@ -886,7 +887,7 @@ class Player {
                     .orElse(playersCell);
             System.err.println("Cell to dodge: " + dodgeCell);
             final Move dodge = new Move(dodgeCell.position, world.player);
-            dodge.priority = 0;
+            dodge.priority = Action.HIGH_PRIORITY;
             world.planner.add(dodge);
         } else {
             adjacentPositions
@@ -895,7 +896,7 @@ class Player {
                     .findAny()
                     .ifPresent(c -> {
                         final SkipTurn skip = new SkipTurn(world.player);
-                        skip.priority = 0;
+                        skip.priority = Action.HIGH_PRIORITY;
                         world.planner.add(skip);
                     });
         }
