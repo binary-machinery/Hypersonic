@@ -182,6 +182,7 @@ class Grid {
 
     String showUtility(IntegerMap utilityMap) {
         final StringBuilder sb = new StringBuilder(height * width);
+        sb.append("Utility").append("\n");
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
                 sb.append(utilityMap.values[columnIndex][rowIndex].value);
@@ -193,6 +194,7 @@ class Grid {
 
     String showDistanceFromPlayer(PathMap pathMap) {
         final StringBuilder sb = new StringBuilder(height * width);
+        sb.append("Distance").append("\n");
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
                 final int distance = pathMap.values[columnIndex][rowIndex].distance;
@@ -208,6 +210,7 @@ class Grid {
 
     String showExplosionMap(IntegerMap explosionMap) {
         final StringBuilder sb = new StringBuilder(height * width);
+        sb.append("Explosions").append("\n");
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
                 final int timeToExplosion = explosionMap.values[columnIndex][rowIndex].value;
@@ -224,6 +227,7 @@ class Grid {
 
     String showSafetyMap(IntegerMap safetyMap) {
         final StringBuilder sb = new StringBuilder(height * width);
+        sb.append("Safety").append("\n");
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
                 final IntegerParameter p = safetyMap.values[columnIndex][rowIndex];
