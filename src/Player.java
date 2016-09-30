@@ -970,13 +970,23 @@ class Player {
         final List<Position> adjacentPositions = generateAdjacentPositions(playerPos);
         final Cell[][] cells = world.grid.cells;
         final Cell playersCell = cells[playerPos.x][playerPos.y];
-        final IntegerParameter safety = safetyMap.values[playerPos.x][playerPos.y];
-        if (safety.value == Bomb.EXPLODE_NEXT_TURN) {
+        final IntegerParameter playerSafety = safetyMap.values[playerPos.x][playerPos.y];
+        if (playerSafety.value == Bomb.EXPLODE_NEXT_TURN) {
             System.err.println("Player's position will explode next turn!");
             final Cell dodgeCell = adjacentPositions
                     .stream()
                     .map(p -> cells[p.x][p.y])
-                    .max((o1, o2) -> safetyMap.values[o1.position.x][o1.position.y].value - safetyMap.values[o2.position.x][o2.position.y].value)
+                    .max((o1, o2) -> {
+                        int safety1 = safetyMap.values[o1.position.x][o1.position.y].value;
+                        if (safety1 == Bomb.NO_EXPLOSION) {
+                            safety1 = 100500;
+                        }
+                        int safety2 = safetyMap.values[o2.position.x][o2.position.y].value;
+                        if (safety2 == Bomb.NO_EXPLOSION) {
+                            safety2 = 100500;
+                        }
+                        return safety1 - safety2;
+                    })
                     .orElse(playersCell);
             System.err.println("Cell to dodge: " + dodgeCell);
             final Move dodge = new Move(dodgeCell.position, world.player);
