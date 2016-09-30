@@ -126,22 +126,8 @@ class Cell {
 
     Position position;
     Type type = Type.Floor;
-    int utility = 0;
-    int distanceFromPlayer = Integer.MAX_VALUE;
-    Cell previousCell; // for pathfinding
     boolean utilityCalculated = false;
     boolean pathCalculated = false;
-
-    static final Comparator<Cell> distanceComparator = (o1, o2) -> o1.distanceFromPlayer - o2.distanceFromPlayer;
-    static final Comparator<Cell> utilityComparator = (o1, o2) -> o1.utility - o2.utility;
-
-    void reset() {
-        utility = 0;
-        distanceFromPlayer = Integer.MAX_VALUE;
-        previousCell = null;
-        utilityCalculated = false;
-        pathCalculated = false;
-    }
 
     @Override
     public String toString() {
@@ -255,7 +241,7 @@ class CellParameter {
     static Comparator<CellParameter> comparator = (o1, o2) -> o1.value - o2.value;
 }
 
-class PathCell {
+class PathParameter {
     int distance = Integer.MAX_VALUE;
     Cell previousCell;
 }
@@ -264,29 +250,50 @@ class InfoMap {
     CellParameter[][] values;
     List<CellParameter> asList;
 
-    InfoMap(int width, int height) {
+    private InfoMap(int width, int height, int defaultValue) {
         values = new CellParameter[width][height];
         asList = new ArrayList<>(width * height);
         for (int x = 0; x < width; ++x) {
             for (int y = 0; y < height; ++y) {
-                asList.add(values[x][y]);
+                final CellParameter p = new CellParameter();
+                p.value = defaultValue;
+                values[x][y] = p;
+                asList.add(p);
             }
         }
+    }
+
+    static InfoMap createUtilityMap(int width, int height) {
+        return new InfoMap(width, height, 0);
+    }
+
+    static InfoMap createExplosionMap(int width, int height) {
+        return new InfoMap(width, height, 0);
+    }
+
+    static InfoMap createSafetyMap(int width, int height) {
+        return new InfoMap(width, height, Bomb.ALREADY_EXPLODED);
     }
 }
 
 class PathMap {
-    PathCell[][] values;
-    List<PathCell> asList;
+    PathParameter[][] values;
+    List<PathParameter> asList;
 
-    PathMap(int width, int height) {
-        values = new PathCell[width][height];
+    private PathMap(int width, int height) {
+        values = new PathParameter[width][height];
         asList = new ArrayList<>(width * height);
         for (int x = 0; x < width; ++x) {
             for (int y = 0; y < height; ++y) {
-                asList.add(values[x][y]);
+                final PathParameter p = new PathParameter();
+                values[x][y] = p;
+                asList.add(p);
             }
         }
+    }
+
+    static PathMap createPathMap(int width, int height) {
+        return new PathMap(width, height);
     }
 }
 
@@ -545,10 +552,10 @@ class Player {
 
             world.planner.clearFinished();
 
-            final InfoMap utilityMap = new InfoMap(world.grid.width, world.grid.height);
-            final PathMap pathMap = new PathMap(world.grid.width, world.grid.height);
-            final InfoMap explosionMap = new InfoMap(world.grid.width, world.grid.height);
-            final InfoMap safetyMap = new InfoMap(world.grid.width, world.grid.height);
+            final InfoMap utilityMap = InfoMap.createUtilityMap(world.grid.width, world.grid.height);
+            final PathMap pathMap = PathMap.createPathMap(world.grid.width, world.grid.height);
+            final InfoMap explosionMap = InfoMap.createExplosionMap(world.grid.width, world.grid.height);
+            final InfoMap safetyMap = InfoMap.createSafetyMap(world.grid.width, world.grid.height);
 
             calculateExplosionMap(world.allBombs, explosionMap);
 //            System.err.println("Explosion map: " + timeCalculator.getTime_ms() + " ms");
@@ -576,14 +583,13 @@ class Player {
                 Cell targetCell = null;
                 int modelIterationCount = 3;
                 while (modelIterationCount-- > 0) {
-                    targetCell = findNearestCellWithHighestUtility(4, ignoredCells);
+                    targetCell = findNearestCellWithHighestUtility(4, ignoredCells, utilityMap, pathMap);
                     if (targetCell != null) {
                         if (targetCell.position.equals(world.player.position)) {
-                            world.grid.asList.forEach(Cell::reset);
-                            final InfoMap utilityMapModel = new InfoMap(world.grid.width, world.grid.height);
-                            final PathMap pathMapModel = new PathMap(world.grid.width, world.grid.height);
-                            final InfoMap explosionMapModel = new InfoMap(world.grid.width, world.grid.height);
-                            final InfoMap safetyMapModel = new InfoMap(world.grid.width, world.grid.height);
+                            final InfoMap utilityMapModel = InfoMap.createUtilityMap(world.grid.width, world.grid.height);
+                            final PathMap pathMapModel = PathMap.createPathMap(world.grid.width, world.grid.height);
+                            final InfoMap explosionMapModel = InfoMap.createExplosionMap(world.grid.width, world.grid.height);
+                            final InfoMap safetyMapModel = InfoMap.createSafetyMap(world.grid.width, world.grid.height);
                             modelNewBomb(
                                     world.player.createBomb(world.player.position),
                                     ignoredCells,
@@ -596,10 +602,10 @@ class Player {
                                 world.planner.add(new PlaceBombAndGoTo(targetCell.position));
                                 break;
                             } else {
-                                targetCell.utility = 0;
+                                utilityMap.values[targetCell.position.x][targetCell.position.y].value = 0;
                             }
                         } else {
-                            final List<Cell> path = getPathTo(targetCell);
+                            final List<Cell> path = getPathTo(targetCell, pathMap);
                             path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
                             world.planner.add(new PlaceBombAndGoTo(targetCell.position));
                             break;
@@ -617,11 +623,10 @@ class Player {
             checkExplosionsAndDodge(safetyMap);
 //            System.err.println("Check explosions and dodge: " + timeCalculator.getTime_ms() + " ms");
 //
-//            System.err.println(world.grid.showUtility());
-//            System.err.println(world.grid.showDistanceFromPlayer());
-//            System.err.println(world.grid.showExplosionMap());
-//            System.err.println(world.grid.showSafetyMap());
-//            System.err.println("Safety cell: " + safetyCell);
+            System.err.println(world.grid.showUtility(utilityMap));
+            System.err.println(world.grid.showDistanceFromPlayer(pathMap));
+            System.err.println(world.grid.showExplosionMap(explosionMap));
+            System.err.println(world.grid.showSafetyMap(safetyMap));
             System.err.println(world.planner);
 
             world.planner.executeNext();
@@ -721,21 +726,23 @@ class Player {
 
     void calculateUtilityForCell(
             final Cell cell,
-            final Set<Position> ignoredCells
+            final Set<Position> ignoredCells,
+            final InfoMap utilityMap
     ) {
+        final CellParameter utility = utilityMap.values[cell.position.x][cell.position.y];
         if (Cell.PASSABLE_SUBTYPES.contains(cell.type)) {
             final Set<Cell> boxes = calculateDestroyedObjects(cell.position, world.player.explosionRange, Cell.BOX_SUBTYPES, ignoredCells);
-            cell.utility = 0;
+            utility.value = 0;
             boxes.forEach(c -> {
                 switch (c.type) {
                     case Box:
-                        cell.utility += 1;
+                        utility.value += 1;
                         break;
                     case BoxWithExtraBomb:
-                        cell.utility += 2;
+                        utility.value += 2;
                         break;
                     case BoxWithExtraRange:
-                        cell.utility += 2;
+                        utility.value += 2;
                         break;
                     default:
                         break;
@@ -760,9 +767,9 @@ class Player {
 //                return;
 //            }
 //            final int distanceToBonus = calculateDistance(world.player.position, cell.position);
-//            cell.utility = Math.max(6 - distanceToBonus, 0);
+//            utility.value = Math.max(6 - distanceToBonus, 0);
 //        }
-        cell.utility = Math.max(0, cell.utility);
+        utility.value = Math.max(0, utility.value);
     }
 
     void calculateCellsUtilityAndPathsAndSafetyMap(
@@ -774,17 +781,18 @@ class Player {
     ) {
         final PriorityQueue<Cell> queue = new PriorityQueue<>(
                 world.grid.width * world.grid.height,
-                Cell.distanceComparator
+                (Comparator<Cell>) (o1, o2) -> pathMap.values[o1.position.x][o1.position.y].distance - pathMap.values[o2.position.x][o2.position.y].distance
         );
         final Cell cells[][] = world.grid.cells;
         final Cell start = cells[world.player.position.x][world.player.position.y];
-        start.distanceFromPlayer = 0;
+        pathMap.values[start.position.x][start.position.y].distance = 0;
         safetyMap.values[start.position.x][start.position.y].value = explosionMap.values[start.position.x][start.position.y].value;
         queue.add(start);
         while (!queue.isEmpty()) {
             final Cell currentCell = queue.poll();
+            final PathParameter currentPathParameter = pathMap.values[currentCell.position.x][currentCell.position.y];
             if (!currentCell.utilityCalculated && !ignoredCells.contains(currentCell.position)) {
-                calculateUtilityForCell(currentCell, ignoredCells);
+                calculateUtilityForCell(currentCell, ignoredCells, utilityMap);
             }
 
             currentCell.utilityCalculated = true;
@@ -798,8 +806,9 @@ class Player {
                         if (adjacentCell.pathCalculated) {
                             return;
                         }
+                        final PathParameter adjacentPathParameter = pathMap.values[p.x][p.y];
                         if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
-                            final int newDistance = currentCell.distanceFromPlayer + 1;
+                            final int newDistance = currentPathParameter.distance + 1;
                             final int explosionTime = explosionMap.values[p.x][p.y].value;
                             final CellParameter adjacentSafety = safetyMap.values[p.x][p.y];
                             if ((explosionTime != Bomb.NO_EXPLOSION)
@@ -808,9 +817,9 @@ class Player {
                                 adjacentSafety.value = Bomb.ALREADY_EXPLODED;
                                 return;
                             }
-                            if (newDistance < adjacentCell.distanceFromPlayer) {
-                                adjacentCell.distanceFromPlayer = newDistance;
-                                adjacentCell.previousCell = currentCell;
+                            if (newDistance < adjacentPathParameter.distance) {
+                                adjacentPathParameter.distance = newDistance;
+                                adjacentPathParameter.previousCell = currentCell;
                                 if (explosionTime == Bomb.NO_EXPLOSION) {
                                     adjacentSafety.value = Bomb.NO_EXPLOSION;
                                 } else {
@@ -903,11 +912,11 @@ class Player {
         });
     }
 
-    Cell findNearestCellWithHighestUtility(int scanRange, final Set<Position> ignoredCells) {
+    Cell findNearestCellWithHighestUtility(int scanRange, final Set<Position> ignoredCells, final InfoMap utilityMap, final PathMap pathMap) {
         return world.grid.asList.stream()
-                .filter(c -> c.distanceFromPlayer <= scanRange)
+                .filter(c -> pathMap.values[c.position.x][c.position.y].distance <= scanRange)
                 .filter(c -> !ignoredCells.contains(c.position))
-                .max(Cell.utilityComparator)
+                .max((o1, o2) -> utilityMap.values[o1.position.x][o1.position.y].value - utilityMap.values[o2.position.x][o2.position.y].value)
                 .orElse(null);
     }
 
@@ -973,17 +982,20 @@ class Player {
         return adjacentPositions;
     }
 
-    List<Cell> getPathTo(Cell cell) {
-        final List<Cell> path = new ArrayList<>(cell.distanceFromPlayer);
-        if (cell.previousCell == null) {
+    List<Cell> getPathTo(final Cell targetCell, final PathMap pathMap) {
+        final PathParameter targetPathParameter = pathMap.values[targetCell.position.x][targetCell.position.y];
+        final List<Cell> path = new ArrayList<>(targetPathParameter.distance);
+        if (targetPathParameter.previousCell == null) {
             // player is already on the target cell
             return path; // empty path
         }
-        Cell nextCell = cell;
+        Cell nextCell = targetCell;
+        PathParameter nextPathParameter = targetPathParameter;
         do {
             path.add(nextCell);
-            nextCell = nextCell.previousCell;
-        } while (nextCell.previousCell != null);
+            nextCell = nextPathParameter.previousCell;
+            nextPathParameter = pathMap.values[nextCell.position.x][nextCell.position.y];
+        } while (nextPathParameter.previousCell != null);
         Collections.reverse(path);
         return path;
     }
