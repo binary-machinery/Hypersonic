@@ -450,9 +450,9 @@ class SkipTurn extends Action {
     private boolean done = false;
     private String comment = "";
 
-    SkipTurn(Boomer player) {
-        this.player = player;
-    }
+//    SkipTurn(Boomer player) {
+//        this.player = player;
+//    }
 
     SkipTurn(Boomer player, String comment) {
         this.player = player;
@@ -477,7 +477,7 @@ class SkipTurn extends Action {
 
     @Override
     public String toString() {
-        return "SkipTurn at" + player.position;
+        return "SkipTurn at" + player.position + " (" + comment + ")";
     }
 }
 
@@ -667,22 +667,14 @@ class Player {
 
             final Set<Cell> alreadyDestroyedObjects = new HashSet<>();
             final Set<Cell> willBeDestroyedObjects = new HashSet<>();
-            // add objects was destroyed this turn
+            // add bobs was destroyed this turn
 //            alreadyDestroyedObjects.addAll(
-//                    world.grid.asList
+//                    world.allBombs
 //                            .stream()
-//                            .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(typeMap.at(c.position).value))
-//                            .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
+//                            .filter(b -> explosionMap.at(b.position).value == Bomb.ALREADY_EXPLODED)
+//                            .map(b -> world.grid.cells[b.position.x][b.position.y])
 //                            .collect(Collectors.toSet())
 //            );
-            // add bobs was destroyed this turn
-            alreadyDestroyedObjects.addAll(
-                    world.allBombs
-                            .stream()
-                            .filter(b -> explosionMap.at(b.position).value == Bomb.ALREADY_EXPLODED)
-                            .map(b -> world.grid.cells[b.position.x][b.position.y])
-                            .collect(Collectors.toSet())
-            );
             // change types for already destroyed objects
             alreadyDestroyedObjects.forEach(o -> {
                 final TypeParameter type = typeMap.at(o.position);
@@ -778,7 +770,7 @@ class Player {
                             final List<Cell> path = getPathTo(nearestSafetyPoint, pathMap);
                             if (path.isEmpty()) {
                                 System.err.println("Already in safe");
-                                world.planner.add(new SkipTurn(world.player));
+                                world.planner.add(new SkipTurn(world.player, "Wait in safety"));
                             } else {
                                 path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
                             }
@@ -1177,17 +1169,18 @@ class Player {
             final Move dodge = new Move(dodgeCell.position, world.player);
             dodge.priority = Action.HIGH_PRIORITY;
             world.planner.add(dodge);
-        } else {
-            adjacentPositions
-                    .stream()
-                    .filter(p -> safetyMap.at(p).value == Bomb.EXPLODE_NEXT_TURN)
-                    .findAny()
-                    .ifPresent(c -> {
-                        final SkipTurn skip = new SkipTurn(world.player);
-                        skip.priority = Action.HIGH_PRIORITY;
-                        world.planner.add(skip);
-                    });
-        }
+        } 
+//        else {
+//            adjacentPositions
+//                    .stream()
+//                    .filter(p -> safetyMap.at(p).value == Bomb.EXPLODE_NEXT_TURN)
+//                    .findAny()
+//                    .ifPresent(c -> {
+//                        final SkipTurn skip = new SkipTurn(world.player, "Dodge explosion");
+//                        skip.priority = Action.HIGH_PRIORITY;
+//                        world.planner.add(skip);
+//                    });
+//        }
     }
 
     void modelNewBomb(
@@ -1206,13 +1199,6 @@ class Player {
         calculateExplosionMap(bombs, typeMap, explosionMap);
         final Set<Cell> alreadyDestroyedObjects = new HashSet<>();
         final Set<Cell> willBeDestroyedObjects = new HashSet<>();
-//        alreadyDestroyedObjects.addAll(
-//                world.grid.asList
-//                        .stream()
-//                        .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(typeMap.at(c.position).value))
-//                        .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
-//                        .collect(Collectors.toSet())
-//        );
         willBeDestroyedObjects.addAll(
                 world.grid.asList
                         .stream()
