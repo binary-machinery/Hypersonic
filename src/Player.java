@@ -948,9 +948,9 @@ class Player {
                 world.grid.width * world.grid.height,
                 (Comparator<Cell>) (o1, o2) -> pathMap.at(o1.position).distance - pathMap.at(o2.position).distance
         );
-        System.err.println("===========================================");
-        System.err.println("calculateCellsUtilityAndPathsAndSafetyMap");
-        System.err.println("Start: " + startPosition);
+//        System.err.println("===========================================");
+//        System.err.println("calculateCellsUtilityAndPathsAndSafetyMap");
+//        System.err.println("Start: " + startPosition);
         final BooleanMap utilityCalculated = BooleanMap.createFalseMap(world.grid.width, world.grid.height);
         final BooleanMap pathCalculated = BooleanMap.createFalseMap(world.grid.width, world.grid.height);
         final Cell cells[][] = world.grid.cells;
@@ -960,12 +960,12 @@ class Player {
         queue.add(startCell);
         while (!queue.isEmpty()) {
             final Cell currentCell = queue.poll();
-            System.err.println("Current cell: " + currentCell);
+//            System.err.println("Current cell: " + currentCell);
             final PathParameter currentPathParameter = pathMap.at(currentCell.position);
             final BooleanParameter currentCellUtilityCalculated = utilityCalculated.at(currentCell.position);
             if (!currentCellUtilityCalculated.value) {
                 calculateUtilityForCell(currentCell, typeMap, alreadyDestroyedObjects, willBeDestroyedObjects, utilityMap);
-                System.err.println("Utility = " + utilityMap.at(currentCell.position).value);
+//                System.err.println("Utility = " + utilityMap.at(currentCell.position).value);
             }
 
             currentCellUtilityCalculated.value = true;
@@ -973,13 +973,13 @@ class Player {
 
             // add adjacent cells to queue
             final List<Position> adjacentPositions = generateAdjacentPositions(currentCell.position, null, typeMap);
-            System.err.println("Check adjacent positions");
+//            System.err.println("Check adjacent positions");
             adjacentPositions
                     .forEach(p -> {
                         final Cell adjacentCell = cells[p.x][p.y];
-                        System.err.println("Adjacent cell: " + adjacentCell);
+//                        System.err.println("Adjacent cell: " + adjacentCell);
                         if (pathCalculated.at(p).value) {
-                            System.err.println("Path already calculated, ignore");
+//                            System.err.println("Path already calculated, ignore");
                             return;
                         }
                         final PathParameter adjacentPathParameter = pathMap.at(p);
@@ -988,18 +988,18 @@ class Player {
                                 || alreadyDestroyedObjects.contains(adjacentCell)
                                 ) {
                             final int newDistance = currentPathParameter.distance + 1;
-                            System.err.println("New distance = " + newDistance);
-                            System.err.println("Explosion time = " + explosionTime);
+//                            System.err.println("New distance = " + newDistance);
+//                            System.err.println("Explosion time = " + explosionTime);
                             final IntegerParameter adjacentSafety = safetyMap.at(p);
                             if ((explosionTime != Bomb.NO_EXPLOSION)
                                     && (explosionTime - newDistance) == Bomb.ALREADY_EXPLODED) {
                                 // player will be dead if go this way, ignore it
-                                System.err.println("Player will be dead if go this way, ignore it");
+//                                System.err.println("Player will be dead if go this way, ignore it");
                                 adjacentSafety.value = Bomb.ALREADY_EXPLODED;
                                 return;
                             }
                             if (newDistance < adjacentPathParameter.distance) {
-                                System.err.println("New distance is better than old one " + adjacentPathParameter.distance);
+//                                System.err.println("New distance is better than old one " + adjacentPathParameter.distance);
                                 adjacentPathParameter.distance = newDistance;
                                 adjacentPathParameter.previousCell = currentCell;
                                 if (explosionTime == Bomb.NO_EXPLOSION) {
@@ -1007,21 +1007,22 @@ class Player {
                                 } else {
                                     adjacentSafety.value = Math.max(0, explosionTime - newDistance);
                                 }
-                                System.err.println("New safety = " + adjacentSafety.value);
+//                                System.err.println("New safety = " + adjacentSafety.value);
                             } else {
-                                System.err.println("Old distance " + adjacentPathParameter.distance + " is better than new one");
+//                                System.err.println("Old distance " + adjacentPathParameter.distance + " is better than new one");
                             }
                             // remove and add -> force to recalculate priority
                             if (queue.contains(adjacentCell)) { // O(n) :(
                                 queue.remove(adjacentCell); // O(n) :(
                             }
                             queue.add(adjacentCell);
-                        } else {
-                            System.err.println("Nonpassable cell, ignore");
                         }
+//                        else {
+//                            System.err.println("Nonpassable cell, ignore");
+//                        }
                     });
         }
-        System.err.println("===========================================");
+//        System.err.println("===========================================");
     }
 
     void calculateExplosionMap(final List<Bomb> bombs, final TypeMap typeMap, final IntegerMap explosionMap) {
@@ -1107,7 +1108,7 @@ class Player {
                 checkExplosionWaveFromBomb(bomb, cell.position, explosionMap);
                 if (Cell.EXPLOSION_STOPPERS.contains(cellType)) {
                     if (Cell.DESTROYABLE_OBJECTS.contains(cellType) && !destroyedObjects.contains(cell)) {
-                        System.err.println("Destroyed: " + cell);
+//                        System.err.println("Destroyed: " + cell);
                         destroyedObjects.add(cell);
                     }
                     break;
