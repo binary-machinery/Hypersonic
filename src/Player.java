@@ -1,6 +1,5 @@
-import com.sun.org.apache.xpath.internal.operations.Bool;
-
 import java.util.*;
+import java.util.stream.Collectors;
 
 class Position {
     int x;
@@ -398,14 +397,20 @@ class SkipTurn extends Action {
 
     private Boomer player;
     private boolean done = false;
+    private String comment = "";
 
     SkipTurn(Boomer player) {
         this.player = player;
     }
 
+    SkipTurn(Boomer player, String comment) {
+        this.player = player;
+        this.comment = comment;
+    }
+
     @Override
     void execute() {
-        System.out.println("MOVE " + player.position.x + " " + player.position.y);
+        System.out.println("MOVE " + player.position.x + " " + player.position.y + " " + comment);
         done = true;
     }
 
@@ -619,47 +624,73 @@ class Player {
 
             calculateCellsUtilityAndPathsAndSafetyMap(world.player.position, ignoredCells, explosionMap, utilityMap, pathMap, safetyMap);
             timeCalculator.showTime("Utility, paths and safety");
+            System.err.println(world.grid.showUtility(utilityMap));
 
             if (world.planner.isEmpty()) {
                 Cell targetCell = null;
-                int modelIterationCount = 3;
+                int modelIterationCount = 5;
                 while (modelIterationCount-- > 0) {
                     targetCell = findNearestCellWithHighestUtility(4, ignoredCells, utilityMap, pathMap);
+                    System.err.println("Target cell: " + targetCell);
                     if (targetCell != null) {
-                        if (targetCell.position.equals(world.player.position)) {
+                        final Position targetPosition = targetCell.position;
+                        final List<Position> adjacentPositions = generateAdjacentPositions(targetPosition, Cell.PASSABLE_SUBTYPES);
+                        int maxSafetyCellCount = 0;
+                        Cell cellToRetreat = null;
+                        for (int i = 0; i < adjacentPositions.size(); ++i) {
+                            final Position adjacentPosition = adjacentPositions.get(i);
+                            System.err.println("Check adjacent position: " + adjacentPosition);
                             final IntegerMap utilityMapModel = IntegerMap.createUtilityMap(world.grid.width, world.grid.height);
                             final PathMap pathMapModel = PathMap.createPathMap(world.grid.width, world.grid.height);
                             final IntegerMap explosionMapModel = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
                             final IntegerMap safetyMapModel = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
                             modelNewBomb(
-                                    world.player.createBomb(world.player.position),
-                                    world.player.position,
+                                    world.player.createBomb(targetPosition),
+                                    adjacentPosition,
                                     ignoredCells,
                                     utilityMapModel,
                                     pathMapModel,
                                     explosionMapModel,
                                     safetyMapModel
                             );
-                            if (!isSafetyMapIsEmpty(safetyMapModel)) {
-                                world.planner.add(new PlaceBombAndGoTo(targetCell.position));
-                                break;
-                            } else {
-                                utilityMap.values[targetCell.position.x][targetCell.position.y].value = 0;
+                            final int safetyCellCount = getSafetyCellCount(safetyMapModel);
+                            System.err.println("Safety cells: " + safetyCellCount);
+                            if (safetyCellCount > maxSafetyCellCount) {
+                                maxSafetyCellCount = safetyCellCount;
+                                cellToRetreat = world.grid.cells[adjacentPosition.x][adjacentPosition.y];
                             }
-                        } else {
+                        }
+                        System.err.println("Cell to retreat: " + cellToRetreat);
+                        if (cellToRetreat != null) {
                             final List<Cell> path = getPathTo(targetCell, pathMap);
                             path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
-                            world.planner.add(new PlaceBombAndGoTo(targetCell.position));
+                            world.planner.add(new PlaceBombAndGoTo(cellToRetreat.position));
                             break;
-                        }
+                        } else {
+                            utilityMap.values[targetCell.position.x][targetCell.position.y].value = 0;
+                    }
                     } else {
-                        world.planner.add(new SkipTurn(world.player));
+                        // go to safety point
+                        System.err.println("No target found, go to safety point");
+                        final Cell nearestSafetyPoint = findNearestSafetyPoint(safetyMap, pathMap);
+                        System.err.println("Nearest safety point: " + nearestSafetyPoint);
+                        if (nearestSafetyPoint != null) {
+                            final List<Cell> path = getPathTo(nearestSafetyPoint, pathMap);
+                            if (path.isEmpty()) {
+                                System.err.println("Already in safe");
+                                world.planner.add(new SkipTurn(world.player));
+                            } else {
+                                path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
+                            }
+                        } else {
+                            world.planner.add(new SkipTurn(world.player, "Goodbye cruel world"));
+                        }
                         break;
                     }
                 }
             }
             if (world.planner.isEmpty()) {
-                world.planner.add(new SkipTurn(world.player));
+                world.planner.add(new SkipTurn(world.player, "wtf"));
             }
             timeCalculator.showTime("Target search");
 
@@ -846,7 +877,7 @@ class Player {
             pathCalculated.values[currentCell.position.x][currentCell.position.y].value = true;
 
             // add adjacent cells to queue
-            final List<Position> adjacentPositions = generateAdjacentPositions(currentCell.position);
+            final List<Position> adjacentPositions = generateAdjacentPositions(currentCell.position, null);
             adjacentPositions
                     .forEach(p -> {
                         final Cell adjacentCell = cells[p.x][p.y];
@@ -963,12 +994,13 @@ class Player {
         return world.grid.asList.stream()
                 .filter(c -> pathMap.values[c.position.x][c.position.y].distance <= scanRange)
                 .filter(c -> !ignoredCells.contains(c.position))
+                .filter(c -> utilityMap.values[c.position.x][c.position.y].value != 0)
                 .max((o1, o2) -> utilityMap.values[o1.position.x][o1.position.y].value - utilityMap.values[o2.position.x][o2.position.y].value)
                 .orElse(null);
     }
 
     void checkExplosionsAndDodge(final Position playerPos, final IntegerMap safetyMap) {
-        final List<Position> adjacentPositions = generateAdjacentPositions(playerPos);
+        final List<Position> adjacentPositions = generateAdjacentPositions(playerPos, Cell.PASSABLE_SUBTYPES);
         final Cell[][] cells = world.grid.cells;
         final Cell playersCell = cells[playerPos.x][playerPos.y];
         final IntegerParameter playerSafety = safetyMap.values[playerPos.x][playerPos.y];
@@ -1022,7 +1054,7 @@ class Player {
         calculateCellsUtilityAndPathsAndSafetyMap(playerPosition, ignoredCells, explosionMap, utilityMap, pathMap, safetyMap);
     }
 
-    List<Position> generateAdjacentPositions(Position center) {
+    List<Position> generateAdjacentPositions(final Position center, final EnumSet<Cell.Type> filter) {
         final List<Position> adjacentPositions = new ArrayList<>(4);
         if (center.x - 1 >= 0) {
             adjacentPositions.add(new Position(center.x - 1, center.y));
@@ -1036,7 +1068,13 @@ class Player {
         if (center.y + 1 < world.grid.height) {
             adjacentPositions.add(new Position(center.x, center.y + 1));
         }
-        return adjacentPositions;
+        if (filter == null) {
+            return adjacentPositions;
+        } else {
+            return adjacentPositions.stream()
+                    .filter(p -> filter.contains(world.grid.cells[p.x][p.y].type))
+                    .collect(Collectors.toList());
+        }
     }
 
     List<Cell> getPathTo(final Cell targetCell, final PathMap pathMap) {
@@ -1057,21 +1095,18 @@ class Player {
         return path;
     }
 
-    boolean isCellWithoutExplosionExists(IntegerMap explosionMap) {
-        return explosionMap.asList
+    int getSafetyCellCount(final IntegerMap safetyMap) {
+        return (int) safetyMap.asList
                 .stream()
-                .filter(c -> c.value == Bomb.NO_EXPLOSION)
-                .map(c -> true)
-                .findAny()
-                .orElse(false);
+                .filter(p -> p.value == Bomb.NO_EXPLOSION)
+                .count();
     }
 
-    boolean isSafetyMapIsEmpty(IntegerMap safetyMap) {
-        return safetyMap.asList
+    Cell findNearestSafetyPoint(final IntegerMap safetyMap, final PathMap pathMap) {
+        return world.grid.asList
                 .stream()
-                .filter(c -> c.value == Bomb.NO_EXPLOSION)
-                .map(c -> false)
-                .findAny()
-                .orElse(true);
+                .filter(c -> safetyMap.values[c.position.x][c.position.y].value == Bomb.NO_EXPLOSION)
+                .min((o1, o2) -> pathMap.values[o1.position.x][o1.position.y].distance - pathMap.values[o2.position.x][o2.position.y].distance)
+                .orElse(null);
     }
 }
