@@ -251,6 +251,10 @@ class PathParameter {
     Cell previousCell;
 }
 
+class CellTypeParameter {
+    Cell.Type value;
+}
+
 class IntegerMap {
     final IntegerParameter[][] values;
     final List<IntegerParameter> asList;
@@ -266,6 +270,10 @@ class IntegerMap {
                 asList.add(p);
             }
         }
+    }
+
+    IntegerParameter at(Position pos) {
+        return values[pos.x][pos.y];
     }
 
     static IntegerMap createUtilityMap(int width, int height) {
@@ -298,6 +306,10 @@ class BooleanMap {
         }
     }
 
+    BooleanParameter at(Position pos) {
+        return values[pos.x][pos.y];
+    }
+
     static BooleanMap createTrueMap(int width, int height) {
         return new BooleanMap(width, height, true);
     }
@@ -323,8 +335,37 @@ class PathMap {
         }
     }
 
+    PathParameter at(Position pos) {
+        return values[pos.x][pos.y];
+    }
+
     static PathMap createPathMap(int width, int height) {
         return new PathMap(width, height);
+    }
+}
+
+class CellTypeMap {
+    final CellTypeParameter[][] values;
+    final List<CellTypeParameter> asList;
+
+    private CellTypeMap(int width, int height) {
+        values = new CellTypeParameter[width][height];
+        asList = new ArrayList<>(width * height);
+        for (int x = 0; x < width; ++x) {
+            for (int y = 0; y < height; ++y) {
+                final CellTypeParameter p = new CellTypeParameter();
+                values[x][y] = p;
+                asList.add(p);
+            }
+        }
+    }
+
+    CellTypeParameter at(Position pos) {
+        return values[pos.x][pos.y];
+    }
+
+    static CellTypeMap createCellTypeMap(int width, int height) {
+        return new CellTypeMap(width, height);
     }
 }
 
@@ -612,13 +653,13 @@ class Player {
                     world.grid.asList
                             .stream()
                             .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(c.type))
-                            .filter(c -> explosionMap.values[c.position.x][c.position.y].value == Bomb.ALREADY_EXPLODED)
+                            .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
                             .collect(Collectors.toSet())
             );
             alreadyDestroyedObjects.addAll(
                     world.allBombs
                             .stream()
-                            .filter(b -> explosionMap.values[b.position.x][b.position.y].value == Bomb.ALREADY_EXPLODED)
+                            .filter(b -> explosionMap.at(b.position).value == Bomb.ALREADY_EXPLODED)
                             .map(b -> world.grid.cells[b.position.x][b.position.y])
                             .collect(Collectors.toSet())
             );
@@ -626,7 +667,7 @@ class Player {
                     world.grid.asList
                             .stream()
                             .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(c.type))
-                            .filter(c -> explosionMap.values[c.position.x][c.position.y].value >= Bomb.ALREADY_EXPLODED)
+                            .filter(c -> explosionMap.at(c.position).value >= Bomb.ALREADY_EXPLODED)
                             .collect(Collectors.toSet())
             );
             timeCalculator.showTime("Model destroyed objects");
@@ -683,7 +724,7 @@ class Player {
                             world.planner.add(new PlaceBombAndGoTo(cellToRetreat.position));
                             break;
                         } else {
-                            utilityMap.values[targetCell.position.x][targetCell.position.y].value = 0;
+                            utilityMap.at(targetPosition).value = 0;
                         }
                     } else {
                         // go to safety point
@@ -820,7 +861,7 @@ class Player {
             final Set<Cell> willBeDestroyedObjects,
             final IntegerMap utilityMap
     ) {
-        final IntegerParameter utility = utilityMap.values[cell.position.x][cell.position.y];
+        final IntegerParameter utility = utilityMap.at(cell.position);
         if (Cell.PASSABLE_SUBTYPES.contains(cell.type)) {
             final Set<Cell> boxes = calculateDestroyedObjects(cell.position, world.player.explosionRange, Cell.BOX_SUBTYPES, willBeDestroyedObjects);
             utility.value = 0;
@@ -878,7 +919,7 @@ class Player {
     ) {
         final PriorityQueue<Cell> queue = new PriorityQueue<>(
                 world.grid.width * world.grid.height,
-                (Comparator<Cell>) (o1, o2) -> pathMap.values[o1.position.x][o1.position.y].distance - pathMap.values[o2.position.x][o2.position.y].distance
+                (Comparator<Cell>) (o1, o2) -> pathMap.at(o1.position).distance - pathMap.at(o2.position).distance
         );
         System.err.println("===========================================");
         System.err.println("calculateCellsUtilityAndPathsAndSafetyMap");
@@ -887,21 +928,21 @@ class Player {
         final BooleanMap pathCalculated = BooleanMap.createFalseMap(world.grid.width, world.grid.height);
         final Cell cells[][] = world.grid.cells;
         final Cell startCell = cells[startPosition.x][startPosition.y];
-        pathMap.values[startCell.position.x][startCell.position.y].distance = 0;
-        safetyMap.values[startCell.position.x][startCell.position.y].value = explosionMap.values[startCell.position.x][startCell.position.y].value;
+        pathMap.at(startPosition).distance = 0;
+        safetyMap.at(startPosition).value = explosionMap.at(startPosition).value;
         queue.add(startCell);
         while (!queue.isEmpty()) {
             final Cell currentCell = queue.poll();
             System.err.println("Current cell: " + currentCell);
-            final PathParameter currentPathParameter = pathMap.values[currentCell.position.x][currentCell.position.y];
-            final BooleanParameter currentCellUtilityCalculated = utilityCalculated.values[currentCell.position.x][currentCell.position.y];
+            final PathParameter currentPathParameter = pathMap.at(currentCell.position);
+            final BooleanParameter currentCellUtilityCalculated = utilityCalculated.at(currentCell.position);
             if (!currentCellUtilityCalculated.value) {
                 calculateUtilityForCell(currentCell, alreadyDestroyedObjects, willBeDestroyedObjects, utilityMap);
-                System.err.println("Utility = " + utilityMap.values[currentCell.position.x][currentCell.position.y].value);
+                System.err.println("Utility = " + utilityMap.at(currentCell.position).value);
             }
 
             currentCellUtilityCalculated.value = true;
-            pathCalculated.values[currentCell.position.x][currentCell.position.y].value = true;
+            pathCalculated.at(currentCell.position).value = true;
 
             // add adjacent cells to queue
             final List<Position> adjacentPositions = generateAdjacentPositions(currentCell.position, null);
@@ -910,19 +951,19 @@ class Player {
                     .forEach(p -> {
                         final Cell adjacentCell = cells[p.x][p.y];
                         System.err.println("Adjacent cell: " + adjacentCell);
-                        if (pathCalculated.values[p.x][p.y].value) {
+                        if (pathCalculated.at(p).value) {
                             System.err.println("Path already calculated, ignore");
                             return;
                         }
-                        final PathParameter adjacentPathParameter = pathMap.values[p.x][p.y];
-                        final int explosionTime = explosionMap.values[p.x][p.y].value;
+                        final PathParameter adjacentPathParameter = pathMap.at(p);
+                        final int explosionTime = explosionMap.at(p).value;
                         if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)
                                 || alreadyDestroyedObjects.contains(adjacentCell)
                                 ) {
                             final int newDistance = currentPathParameter.distance + 1;
                             System.err.println("New distance = " + newDistance);
                             System.err.println("Explosion time = " + explosionTime);
-                            final IntegerParameter adjacentSafety = safetyMap.values[p.x][p.y];
+                            final IntegerParameter adjacentSafety = safetyMap.at(p);
                             if ((explosionTime != Bomb.NO_EXPLOSION)
                                     && (explosionTime - newDistance) == Bomb.ALREADY_EXPLODED) {
                                 // player will be dead if go this way, ignore it
@@ -968,11 +1009,11 @@ class Player {
             final Position position,
             final IntegerMap explosionMap
     ) {
-        final int stateAtBombPosition = explosionMap.values[bomb.position.x][bomb.position.y].value;
+        final int stateAtBombPosition = explosionMap.at(bomb.position).value;
         final int timer = (stateAtBombPosition == Bomb.NO_EXPLOSION) ? bomb.timer : stateAtBombPosition; // check for chain effect
-        final int previousValue = explosionMap.values[position.x][position.y].value;
+        final int previousValue = explosionMap.at(position).value;
         if (previousValue == Bomb.NO_EXPLOSION || previousValue > timer) {
-            explosionMap.values[position.x][position.y].value = timer;
+            explosionMap.at(position).value = timer;
         }
     }
 
@@ -1043,9 +1084,9 @@ class Player {
 
     Cell findNearestCellWithHighestUtility(int scanRange, final IntegerMap utilityMap, final PathMap pathMap) {
         return world.grid.asList.stream()
-                .filter(c -> pathMap.values[c.position.x][c.position.y].distance <= scanRange)
-                .filter(c -> utilityMap.values[c.position.x][c.position.y].value != 0)
-                .max((o1, o2) -> utilityMap.values[o1.position.x][o1.position.y].value - utilityMap.values[o2.position.x][o2.position.y].value)
+                .filter(c -> pathMap.at(c.position).distance <= scanRange)
+                .filter(c -> utilityMap.at(c.position).value != 0)
+                .max((o1, o2) -> utilityMap.at(o1.position).value - utilityMap.at(o2.position).value)
                 .orElse(null);
     }
 
@@ -1053,18 +1094,18 @@ class Player {
         final List<Position> adjacentPositions = generateAdjacentPositions(playerPos, Cell.PASSABLE_SUBTYPES);
         final Cell[][] cells = world.grid.cells;
         final Cell playersCell = cells[playerPos.x][playerPos.y];
-        final IntegerParameter playerSafety = safetyMap.values[playerPos.x][playerPos.y];
+        final IntegerParameter playerSafety = safetyMap.at(playerPos);
         if (playerSafety.value == Bomb.EXPLODE_NEXT_TURN) {
             System.err.println("Player's position will explode next turn!");
             final Cell dodgeCell = adjacentPositions
                     .stream()
                     .map(p -> cells[p.x][p.y])
                     .max((o1, o2) -> {
-                        int safety1 = safetyMap.values[o1.position.x][o1.position.y].value;
+                        int safety1 = safetyMap.at(o1.position).value;
                         if (safety1 == Bomb.NO_EXPLOSION) {
                             safety1 = 100500;
                         }
-                        int safety2 = safetyMap.values[o2.position.x][o2.position.y].value;
+                        int safety2 = safetyMap.at(o2.position).value;
                         if (safety2 == Bomb.NO_EXPLOSION) {
                             safety2 = 100500;
                         }
@@ -1078,7 +1119,7 @@ class Player {
         } else {
             adjacentPositions
                     .stream()
-                    .filter(p -> safetyMap.values[p.x][p.y].value == Bomb.EXPLODE_NEXT_TURN)
+                    .filter(p -> safetyMap.at(p).value == Bomb.EXPLODE_NEXT_TURN)
                     .findAny()
                     .ifPresent(c -> {
                         final SkipTurn skip = new SkipTurn(world.player);
@@ -1106,14 +1147,14 @@ class Player {
                 world.grid.asList
                         .stream()
                         .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(c.type))
-                        .filter(c -> explosionMap.values[c.position.x][c.position.y].value == Bomb.ALREADY_EXPLODED)
+                        .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
                         .collect(Collectors.toSet())
         );
         willBeDestroyedObjects.addAll(
                 world.grid.asList
                         .stream()
                         .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(c.type))
-                        .filter(c -> explosionMap.values[c.position.x][c.position.y].value >= Bomb.ALREADY_EXPLODED)
+                        .filter(c -> explosionMap.at(c.position).value >= Bomb.ALREADY_EXPLODED)
                         .collect(Collectors.toSet())
         );
         calculateCellsUtilityAndPathsAndSafetyMap(
@@ -1151,7 +1192,7 @@ class Player {
     }
 
     List<Cell> getPathTo(final Cell targetCell, final PathMap pathMap) {
-        final PathParameter targetPathParameter = pathMap.values[targetCell.position.x][targetCell.position.y];
+        final PathParameter targetPathParameter = pathMap.at(targetCell.position);
         final List<Cell> path = new ArrayList<>(targetPathParameter.distance);
         if (targetPathParameter.previousCell == null) {
             // player is already on the target cell
@@ -1162,7 +1203,7 @@ class Player {
         do {
             path.add(nextCell);
             nextCell = nextPathParameter.previousCell;
-            nextPathParameter = pathMap.values[nextCell.position.x][nextCell.position.y];
+            nextPathParameter = pathMap.at(nextCell.position);
         } while (nextPathParameter.previousCell != null);
         Collections.reverse(path);
         return path;
@@ -1178,8 +1219,8 @@ class Player {
     Cell findNearestSafetyPoint(final IntegerMap safetyMap, final PathMap pathMap) {
         return world.grid.asList
                 .stream()
-                .filter(c -> safetyMap.values[c.position.x][c.position.y].value == Bomb.NO_EXPLOSION)
-                .min((o1, o2) -> pathMap.values[o1.position.x][o1.position.y].distance - pathMap.values[o2.position.x][o2.position.y].distance)
+                .filter(c -> safetyMap.at(c.position).value == Bomb.NO_EXPLOSION)
+                .min((o1, o2) -> pathMap.at(o1.position).distance - pathMap.at(o2.position).distance)
                 .orElse(null);
     }
 }
