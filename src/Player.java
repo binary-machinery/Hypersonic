@@ -559,29 +559,31 @@ class Player {
 ////                System.err.println("Find target: " + timeCalculator.getTime_ms() + " ms");
 //            }
 
-            Cell targetCell = null;
-            int modelIterationCount = 3;
-            while (modelIterationCount-- > 0) {
-                targetCell = findNearestCellWithHighestUtility(4, ignoredCells);
-                if (targetCell != null) {
-                    if (targetCell.position.equals(world.player.position)) {
-                        world.grid.asList.forEach(Cell::reset);
-                        modelNewBomb(world.player.createBomb(world.player.position), ignoredCells);
-                        if (!isSafetyMapIsEmpty()) {
+            if (world.planner.isEmpty()) {
+                Cell targetCell = null;
+                int modelIterationCount = 3;
+                while (modelIterationCount-- > 0) {
+                    targetCell = findNearestCellWithHighestUtility(4, ignoredCells);
+                    if (targetCell != null) {
+                        if (targetCell.position.equals(world.player.position)) {
+                            world.grid.asList.forEach(Cell::reset);
+                            modelNewBomb(world.player.createBomb(world.player.position), ignoredCells);
+                            if (!isSafetyMapIsEmpty()) {
+                                world.planner.add(new PlaceBombAndGoTo(targetCell.position));
+                                break;
+                            } else {
+                                targetCell.utility = 0;
+                            }
+                        } else {
+                            final List<Cell> path = getPathTo(targetCell);
+                            path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
                             world.planner.add(new PlaceBombAndGoTo(targetCell.position));
                             break;
-                        } else {
-                            targetCell.utility = 0;
                         }
                     } else {
-                        final List<Cell> path = getPathTo(targetCell);
-                        path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
-                        world.planner.add(new PlaceBombAndGoTo(targetCell.position));
+                        world.planner.add(new SkipTurn(world.player));
                         break;
                     }
-                } else {
-                    world.planner.add(new SkipTurn(world.player));
-                    break;
                 }
             }
             if (world.planner.isEmpty()) {
