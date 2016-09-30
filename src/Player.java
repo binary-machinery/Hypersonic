@@ -1,3 +1,5 @@
+import com.sun.org.apache.xpath.internal.operations.Bool;
+
 import java.util.*;
 
 class Position {
@@ -126,8 +128,6 @@ class Cell {
 
     Position position;
     Type type = Type.Floor;
-    boolean utilityCalculated = false;
-    boolean pathCalculated = false;
 
     @Override
     public String toString() {
@@ -180,7 +180,7 @@ class Grid {
         return sb.toString();
     }
 
-    String showUtility(InfoMap utilityMap) {
+    String showUtility(IntegerMap utilityMap) {
         final StringBuilder sb = new StringBuilder(height * width);
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
@@ -206,7 +206,7 @@ class Grid {
         return sb.toString();
     }
 
-    String showExplosionMap(InfoMap explosionMap) {
+    String showExplosionMap(IntegerMap explosionMap) {
         final StringBuilder sb = new StringBuilder(height * width);
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
@@ -222,11 +222,11 @@ class Grid {
         return sb.toString();
     }
 
-    String showSafetyMap(InfoMap safetyMap) {
+    String showSafetyMap(IntegerMap safetyMap) {
         final StringBuilder sb = new StringBuilder(height * width);
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
-                final CellParameter p = safetyMap.values[columnIndex][rowIndex];
+                final IntegerParameter p = safetyMap.values[columnIndex][rowIndex];
                 sb.append(p.value);
             }
             sb.append("\n");
@@ -235,10 +235,12 @@ class Grid {
     }
 }
 
-class CellParameter {
+class IntegerParameter {
     int value;
+}
 
-    static Comparator<CellParameter> comparator = (o1, o2) -> o1.value - o2.value;
+class BooleanParameter {
+    boolean value;
 }
 
 class PathParameter {
@@ -246,16 +248,16 @@ class PathParameter {
     Cell previousCell;
 }
 
-class InfoMap {
-    CellParameter[][] values;
-    List<CellParameter> asList;
+class IntegerMap {
+    final IntegerParameter[][] values;
+    final List<IntegerParameter> asList;
 
-    private InfoMap(int width, int height, int defaultValue) {
-        values = new CellParameter[width][height];
+    private IntegerMap(int width, int height, int defaultValue) {
+        values = new IntegerParameter[width][height];
         asList = new ArrayList<>(width * height);
         for (int x = 0; x < width; ++x) {
             for (int y = 0; y < height; ++y) {
-                final CellParameter p = new CellParameter();
+                final IntegerParameter p = new IntegerParameter();
                 p.value = defaultValue;
                 values[x][y] = p;
                 asList.add(p);
@@ -263,22 +265,48 @@ class InfoMap {
         }
     }
 
-    static InfoMap createUtilityMap(int width, int height) {
-        return new InfoMap(width, height, 0);
+    static IntegerMap createUtilityMap(int width, int height) {
+        return new IntegerMap(width, height, 0);
     }
 
-    static InfoMap createExplosionMap(int width, int height) {
-        return new InfoMap(width, height, 0);
+    static IntegerMap createExplosionMap(int width, int height) {
+        return new IntegerMap(width, height, 0);
     }
 
-    static InfoMap createSafetyMap(int width, int height) {
-        return new InfoMap(width, height, Bomb.ALREADY_EXPLODED);
+    static IntegerMap createSafetyMap(int width, int height) {
+        return new IntegerMap(width, height, Bomb.ALREADY_EXPLODED);
+    }
+}
+
+class BooleanMap {
+    final BooleanParameter[][] values;
+    final List<BooleanParameter> asList;
+
+    private BooleanMap(int width, int height, boolean defaultValue) {
+        values = new BooleanParameter[width][height];
+        asList = new ArrayList<>(width * height);
+        for (int x = 0; x < width; ++x) {
+            for (int y = 0; y < height; ++y) {
+                final BooleanParameter p = new BooleanParameter();
+                p.value = defaultValue;
+                values[x][y] = p;
+                asList.add(p);
+            }
+        }
+    }
+
+    static BooleanMap createTrueMap(int width, int height) {
+        return new BooleanMap(width, height, true);
+    }
+
+    static BooleanMap createFalseMap(int width, int height) {
+        return new BooleanMap(width, height, false);
     }
 }
 
 class PathMap {
-    PathParameter[][] values;
-    List<PathParameter> asList;
+    final PathParameter[][] values;
+    final List<PathParameter> asList;
 
     private PathMap(int width, int height) {
         values = new PathParameter[width][height];
@@ -552,10 +580,10 @@ class Player {
 
             world.planner.clearFinished();
 
-            final InfoMap utilityMap = InfoMap.createUtilityMap(world.grid.width, world.grid.height);
+            final IntegerMap utilityMap = IntegerMap.createUtilityMap(world.grid.width, world.grid.height);
             final PathMap pathMap = PathMap.createPathMap(world.grid.width, world.grid.height);
-            final InfoMap explosionMap = InfoMap.createExplosionMap(world.grid.width, world.grid.height);
-            final InfoMap safetyMap = InfoMap.createSafetyMap(world.grid.width, world.grid.height);
+            final IntegerMap explosionMap = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
+            final IntegerMap safetyMap = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
 
             calculateExplosionMap(world.allBombs, explosionMap);
 //            System.err.println("Explosion map: " + timeCalculator.getTime_ms() + " ms");
@@ -586,10 +614,10 @@ class Player {
                     targetCell = findNearestCellWithHighestUtility(4, ignoredCells, utilityMap, pathMap);
                     if (targetCell != null) {
                         if (targetCell.position.equals(world.player.position)) {
-                            final InfoMap utilityMapModel = InfoMap.createUtilityMap(world.grid.width, world.grid.height);
+                            final IntegerMap utilityMapModel = IntegerMap.createUtilityMap(world.grid.width, world.grid.height);
                             final PathMap pathMapModel = PathMap.createPathMap(world.grid.width, world.grid.height);
-                            final InfoMap explosionMapModel = InfoMap.createExplosionMap(world.grid.width, world.grid.height);
-                            final InfoMap safetyMapModel = InfoMap.createSafetyMap(world.grid.width, world.grid.height);
+                            final IntegerMap explosionMapModel = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
+                            final IntegerMap safetyMapModel = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
                             modelNewBomb(
                                     world.player.createBomb(world.player.position),
                                     ignoredCells,
@@ -727,9 +755,9 @@ class Player {
     void calculateUtilityForCell(
             final Cell cell,
             final Set<Position> ignoredCells,
-            final InfoMap utilityMap
+            final IntegerMap utilityMap
     ) {
-        final CellParameter utility = utilityMap.values[cell.position.x][cell.position.y];
+        final IntegerParameter utility = utilityMap.values[cell.position.x][cell.position.y];
         if (Cell.PASSABLE_SUBTYPES.contains(cell.type)) {
             final Set<Cell> boxes = calculateDestroyedObjects(cell.position, world.player.explosionRange, Cell.BOX_SUBTYPES, ignoredCells);
             utility.value = 0;
@@ -774,15 +802,17 @@ class Player {
 
     void calculateCellsUtilityAndPathsAndSafetyMap(
             final Set<Position> ignoredCells,
-            final InfoMap explosionMap,
-            final InfoMap utilityMap,
+            final IntegerMap explosionMap,
+            final IntegerMap utilityMap,
             final PathMap pathMap,
-            final InfoMap safetyMap
+            final IntegerMap safetyMap
     ) {
         final PriorityQueue<Cell> queue = new PriorityQueue<>(
                 world.grid.width * world.grid.height,
                 (Comparator<Cell>) (o1, o2) -> pathMap.values[o1.position.x][o1.position.y].distance - pathMap.values[o2.position.x][o2.position.y].distance
         );
+        final BooleanMap utilityCalculated = BooleanMap.createFalseMap(world.grid.width, world.grid.height);
+        final BooleanMap pathCalculated = BooleanMap.createFalseMap(world.grid.width, world.grid.height);
         final Cell cells[][] = world.grid.cells;
         final Cell start = cells[world.player.position.x][world.player.position.y];
         pathMap.values[start.position.x][start.position.y].distance = 0;
@@ -791,26 +821,27 @@ class Player {
         while (!queue.isEmpty()) {
             final Cell currentCell = queue.poll();
             final PathParameter currentPathParameter = pathMap.values[currentCell.position.x][currentCell.position.y];
-            if (!currentCell.utilityCalculated && !ignoredCells.contains(currentCell.position)) {
+            final BooleanParameter currentCellUtilityCalculated = utilityCalculated.values[currentCell.position.x][currentCell.position.y];
+            if (!currentCellUtilityCalculated.value && !ignoredCells.contains(currentCell.position)) {
                 calculateUtilityForCell(currentCell, ignoredCells, utilityMap);
             }
 
-            currentCell.utilityCalculated = true;
-            currentCell.pathCalculated = true;
+            currentCellUtilityCalculated.value = true;
+            pathCalculated.values[currentCell.position.x][currentCell.position.y].value = true;
 
             // add adjacent cells to queue
             final List<Position> adjacentPositions = generateAdjacentPositions(currentCell.position);
             adjacentPositions
                     .forEach(p -> {
                         final Cell adjacentCell = cells[p.x][p.y];
-                        if (adjacentCell.pathCalculated) {
+                        if (pathCalculated.values[p.x][p.y].value) {
                             return;
                         }
                         final PathParameter adjacentPathParameter = pathMap.values[p.x][p.y];
                         if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)) {
                             final int newDistance = currentPathParameter.distance + 1;
                             final int explosionTime = explosionMap.values[p.x][p.y].value;
-                            final CellParameter adjacentSafety = safetyMap.values[p.x][p.y];
+                            final IntegerParameter adjacentSafety = safetyMap.values[p.x][p.y];
                             if ((explosionTime != Bomb.NO_EXPLOSION)
                                     && (explosionTime - newDistance) == Bomb.ALREADY_EXPLODED) {
                                 // player will be dead if go this way, ignore it
@@ -836,13 +867,13 @@ class Player {
         }
     }
 
-    void calculateExplosionMap(final List<Bomb> bombs, final InfoMap explosionMap) {
+    void calculateExplosionMap(final List<Bomb> bombs, final IntegerMap explosionMap) {
         bombs.stream()
                 .sorted((o1, o2) -> o1.timer - o2.timer)
                 .forEach(b -> calculateExplosionMapForBomb(b, explosionMap));
     }
 
-    void checkExplosionWaveFromBomb(final Bomb bomb, final Position position, final InfoMap explosionMap) {
+    void checkExplosionWaveFromBomb(final Bomb bomb, final Position position, final IntegerMap explosionMap) {
         final int stateAtBombPosition = explosionMap.values[bomb.position.x][bomb.position.y].value;
         final int timer = (stateAtBombPosition == Bomb.NO_EXPLOSION) ? bomb.timer : stateAtBombPosition; // check for chain effect
         final int previousValue = explosionMap.values[position.x][position.y].value;
@@ -887,7 +918,7 @@ class Player {
         return destroyedObjects;
     }
 
-    void calculateExplosionMapForBomb(final Bomb bomb, final InfoMap explosionMap) {
+    void calculateExplosionMapForBomb(final Bomb bomb, final IntegerMap explosionMap) {
         checkExplosionWaveFromBomb(bomb, bomb.position, explosionMap);
         final List<Position> directions = new ArrayList<>(4);
         directions.add(new Position(1, 0));
@@ -912,7 +943,7 @@ class Player {
         });
     }
 
-    Cell findNearestCellWithHighestUtility(int scanRange, final Set<Position> ignoredCells, final InfoMap utilityMap, final PathMap pathMap) {
+    Cell findNearestCellWithHighestUtility(int scanRange, final Set<Position> ignoredCells, final IntegerMap utilityMap, final PathMap pathMap) {
         return world.grid.asList.stream()
                 .filter(c -> pathMap.values[c.position.x][c.position.y].distance <= scanRange)
                 .filter(c -> !ignoredCells.contains(c.position))
@@ -920,12 +951,12 @@ class Player {
                 .orElse(null);
     }
 
-    void checkExplosionsAndDodge(final InfoMap safetyMap) {
+    void checkExplosionsAndDodge(final IntegerMap safetyMap) {
         final Position playerPos = world.player.position;
         final List<Position> adjacentPositions = generateAdjacentPositions(playerPos);
         final Cell[][] cells = world.grid.cells;
         final Cell playersCell = cells[playerPos.x][playerPos.y];
-        final CellParameter safety = safetyMap.values[playerPos.x][playerPos.y];
+        final IntegerParameter safety = safetyMap.values[playerPos.x][playerPos.y];
         if (safety.value == Bomb.EXPLODE_NEXT_TURN) {
             System.err.println("Player's position will explode next turn!");
             final Cell dodgeCell = adjacentPositions
@@ -953,10 +984,10 @@ class Player {
     void modelNewBomb(
             Bomb bomb,
             Set<Position> ignoredCells,
-            final InfoMap utilityMap,
+            final IntegerMap utilityMap,
             final PathMap pathMap,
-            final InfoMap explosionMap,
-            final InfoMap safetyMap
+            final IntegerMap explosionMap,
+            final IntegerMap safetyMap
     ) {
         final List<Bomb> bombs = new ArrayList<>(world.allBombs.size() + 1);
         world.allBombs.forEach(bombs::add);
@@ -1000,7 +1031,7 @@ class Player {
         return path;
     }
 
-    boolean isCellWithoutExplosionExists(InfoMap explosionMap) {
+    boolean isCellWithoutExplosionExists(IntegerMap explosionMap) {
         return explosionMap.asList
                 .stream()
                 .filter(c -> c.value == Bomb.NO_EXPLOSION)
@@ -1009,7 +1040,7 @@ class Player {
                 .orElse(false);
     }
 
-    boolean isSafetyMapIsEmpty(InfoMap safetyMap) {
+    boolean isSafetyMapIsEmpty(IntegerMap safetyMap) {
         return safetyMap.asList
                 .stream()
                 .filter(c -> c.value == Bomb.NO_EXPLOSION)
