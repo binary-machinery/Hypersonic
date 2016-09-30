@@ -126,25 +126,19 @@ class Cell {
     static EnumSet<Type> DESTROYABLE_OBJECTS = EnumSet.of(Type.Box, Type.BoxWithExtraRange, Type.BoxWithExtraBomb, Type.ExtraBomb, Type.ExtraRange);
 
     Position position;
-    Type type = Type.Floor;
 
     @Override
     public String toString() {
-        return "" + position + ", " + type;
+        return "" + position;
     }
 
     @Override
     public int hashCode() {
-        // ignore utility
-        int res = 0;
-        res = 31 * res + position.hashCode();
-        res = 31 * res + type.hashCode();
-        return res;
+        return position.hashCode();
     }
 
     @Override
     public boolean equals(Object obj) {
-        // ignore utility
         if (obj == null) {
             return false;
         }
@@ -152,8 +146,7 @@ class Cell {
             return false;
         }
         final Cell other = (Cell) obj;
-        return position.equals(other.position)
-                && type == other.type;
+        return position.equals(other.position);
     }
 }
 
@@ -168,11 +161,11 @@ class Grid {
         asList = new ArrayList<>(width * height);
     }
 
-    String showTypes() {
+    String showTypes(TypeMap typeMap) {
         final StringBuilder sb = new StringBuilder(height * width);
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
-                sb.append(cells[columnIndex][rowIndex].type.symbol);
+                sb.append(typeMap.values[columnIndex][rowIndex].value.symbol);
             }
             sb.append("\n");
         }
@@ -207,14 +200,14 @@ class Grid {
         return sb.toString();
     }
 
-    String showExplosionMap(IntegerMap explosionMap) {
+    String showExplosionMap(IntegerMap explosionMap, TypeMap typeMap) {
         final StringBuilder sb = new StringBuilder(height * width);
         sb.append("Explosions").append("\n");
         for (int rowIndex = 0; rowIndex < height; ++rowIndex) {
             for (int columnIndex = 0; columnIndex < width; ++columnIndex) {
                 final int timeToExplosion = explosionMap.values[columnIndex][rowIndex].value;
                 if (timeToExplosion == Bomb.NO_EXPLOSION) {
-                    sb.append(Cell.NONPASSABLE_SUBTYPES.contains(cells[columnIndex][rowIndex].type) ? "X" : ".");
+                    sb.append(Cell.NONPASSABLE_SUBTYPES.contains(typeMap.values[columnIndex][rowIndex].value) ? "X" : ".");
                 } else {
                     sb.append(timeToExplosion);
                 }
@@ -251,8 +244,8 @@ class PathParameter {
     Cell previousCell;
 }
 
-class CellTypeParameter {
-    Cell.Type value;
+class TypeParameter {
+    Cell.Type value = Cell.Type.Floor;
 }
 
 class IntegerMap {
@@ -344,28 +337,28 @@ class PathMap {
     }
 }
 
-class CellTypeMap {
-    final CellTypeParameter[][] values;
-    final List<CellTypeParameter> asList;
+class TypeMap {
+    final TypeParameter[][] values;
+    final List<TypeParameter> asList;
 
-    private CellTypeMap(int width, int height) {
-        values = new CellTypeParameter[width][height];
+    private TypeMap(int width, int height) {
+        values = new TypeParameter[width][height];
         asList = new ArrayList<>(width * height);
         for (int x = 0; x < width; ++x) {
             for (int y = 0; y < height; ++y) {
-                final CellTypeParameter p = new CellTypeParameter();
+                final TypeParameter p = new TypeParameter();
                 values[x][y] = p;
                 asList.add(p);
             }
         }
     }
 
-    CellTypeParameter at(Position pos) {
+    TypeParameter at(Position pos) {
         return values[pos.x][pos.y];
     }
 
-    static CellTypeMap createCellTypeMap(int width, int height) {
-        return new CellTypeMap(width, height);
+    static TypeMap createTypeMap(int width, int height) {
+        return new TypeMap(width, height);
     }
 }
 
@@ -631,20 +624,22 @@ class Player {
         timeCalculator.enabled = false;
         while (true) {
             timeCalculator.start();
-            updateWorldState();
-            timeCalculator.showTime("Update world");
 
-            in.nextLine();
-
-            world.planner.clearFinished();
-
+            final TypeMap typeMap = TypeMap.createTypeMap(world.grid.width, world.grid.height);
             final IntegerMap utilityMap = IntegerMap.createUtilityMap(world.grid.width, world.grid.height);
             final PathMap pathMap = PathMap.createPathMap(world.grid.width, world.grid.height);
             final IntegerMap explosionMap = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
             final IntegerMap safetyMap = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
             timeCalculator.showTime("Maps allocation");
 
-            calculateExplosionMap(world.allBombs, explosionMap);
+            updateWorldState(typeMap);
+            timeCalculator.showTime("Update world");
+
+            in.nextLine();
+
+            world.planner.clearFinished();
+
+            calculateExplosionMap(world.allBombs, typeMap, explosionMap);
             timeCalculator.showTime("Explosion map");
 
             final Set<Cell> alreadyDestroyedObjects = new HashSet<>();
@@ -652,7 +647,7 @@ class Player {
             alreadyDestroyedObjects.addAll(
                     world.grid.asList
                             .stream()
-                            .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(c.type))
+                            .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(typeMap.at(c.position).value))
                             .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
                             .collect(Collectors.toSet())
             );
@@ -666,7 +661,7 @@ class Player {
             willBeDestroyedObjects.addAll(
                     world.grid.asList
                             .stream()
-                            .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(c.type))
+                            .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(typeMap.at(c.position).value))
                             .filter(c -> explosionMap.at(c.position).value >= Bomb.ALREADY_EXPLODED)
                             .collect(Collectors.toSet())
             );
@@ -676,6 +671,7 @@ class Player {
                     world.player.position,
                     alreadyDestroyedObjects,
                     willBeDestroyedObjects,
+                    typeMap,
                     explosionMap,
                     utilityMap,
                     pathMap,
@@ -692,7 +688,7 @@ class Player {
                     System.err.println("Target cell: " + targetCell);
                     if (targetCell != null) {
                         final Position targetPosition = targetCell.position;
-                        final List<Position> adjacentPositions = generateAdjacentPositions(targetPosition, Cell.PASSABLE_SUBTYPES);
+                        final List<Position> adjacentPositions = generateAdjacentPositions(targetPosition, Cell.PASSABLE_SUBTYPES, typeMap);
                         int maxSafetyCellCount = 0;
                         Cell cellToRetreat = null;
                         for (int i = 0; i < adjacentPositions.size(); ++i) {
@@ -705,6 +701,7 @@ class Player {
                             modelNewBomb(
                                     world.player.createBomb(targetPosition),
                                     adjacentPosition,
+                                    typeMap,
                                     utilityMapModel,
                                     pathMapModel,
                                     explosionMapModel,
@@ -751,12 +748,12 @@ class Player {
             }
             timeCalculator.showTime("Target search");
 
-            checkExplosionsAndDodge(world.player.position, safetyMap);
+            checkExplosionsAndDodge(world.player.position, typeMap, safetyMap);
             timeCalculator.showTime("Check explosions and dodge");
 
             System.err.println(world.grid.showUtility(utilityMap));
             System.err.println(world.grid.showDistanceFromPlayer(pathMap));
-            System.err.println(world.grid.showExplosionMap(explosionMap));
+            System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
             System.err.println(world.grid.showSafetyMap(safetyMap));
             System.err.println(world.planner);
 
@@ -772,7 +769,7 @@ class Player {
         in.nextLine();
     }
 
-    void updateWorldState() {
+    void updateWorldState(final TypeMap typeMap) {
         world.playerBombs.clear();
         world.enemyBombs.clear();
         world.allBombs.clear();
@@ -783,14 +780,15 @@ class Player {
                 final Cell cell = new Cell();
                 cell.position = new Position(columnIndex, rowIndex);
                 final char typeSymbol = row.charAt(columnIndex);
+                final TypeParameter typeParameter = typeMap.values[columnIndex][rowIndex];
                 if (typeSymbol == Cell.Type.Box.symbol) {
-                    cell.type = Cell.Type.Box;
+                    typeParameter.value = Cell.Type.Box;
                 } else if (typeSymbol == Cell.Type.BoxWithExtraRange.symbol) {
-                    cell.type = Cell.Type.BoxWithExtraRange;
+                    typeParameter.value = Cell.Type.BoxWithExtraRange;
                 } else if (typeSymbol == Cell.Type.BoxWithExtraBomb.symbol) {
-                    cell.type = Cell.Type.BoxWithExtraBomb;
+                    typeParameter.value = Cell.Type.BoxWithExtraBomb;
                 } else if (typeSymbol == Cell.Type.Wall.symbol) {
-                    cell.type = Cell.Type.Wall;
+                    typeParameter.value = Cell.Type.Wall;
                 }
                 world.grid.cells[columnIndex][rowIndex] = cell;
                 world.grid.asList.add(cell);
@@ -840,10 +838,10 @@ class Player {
                     item.position.y = y;
                     if (param1 == Item.Type.ExtraRange.code) {
                         item.type = Item.Type.ExtraRange;
-                        world.grid.cells[x][y].type = Cell.Type.ExtraRange;
+                        typeMap.values[x][y].value = Cell.Type.ExtraRange;
                     } else if (param1 == Item.Type.ExtraBomb.code) {
                         item.type = Item.Type.ExtraBomb;
-                        world.grid.cells[x][y].type = Cell.Type.ExtraBomb;
+                        typeMap.values[x][y].value = Cell.Type.ExtraBomb;
                     }
                     break;
                 default:
@@ -852,21 +850,29 @@ class Player {
         }
         world.allBombs.addAll(world.playerBombs);
         world.allBombs.addAll(world.enemyBombs);
-        world.allBombs.forEach(b -> world.grid.cells[b.position.x][b.position.y].type = Cell.Type.Bomb);
+        world.allBombs.forEach(b -> typeMap.at(b.position).value = Cell.Type.Bomb);
     }
 
     void calculateUtilityForCell(
             final Cell cell,
+            final TypeMap typeMap,
             final Set<Cell> alreadyDestroyedObjects,
             final Set<Cell> willBeDestroyedObjects,
             final IntegerMap utilityMap
     ) {
         final IntegerParameter utility = utilityMap.at(cell.position);
-        if (Cell.PASSABLE_SUBTYPES.contains(cell.type)) {
-            final Set<Cell> boxes = calculateDestroyedObjects(cell.position, world.player.explosionRange, Cell.BOX_SUBTYPES, willBeDestroyedObjects);
+        final Cell.Type cellType = typeMap.at(cell.position).value;
+        if (Cell.PASSABLE_SUBTYPES.contains(cellType)) {
+            final Set<Cell> boxes = calculateDestroyedObjects(
+                    cell.position,
+                    world.player.explosionRange,
+                    typeMap,
+                    Cell.BOX_SUBTYPES,
+                    willBeDestroyedObjects
+            );
             utility.value = 0;
             boxes.forEach(c -> {
-                switch (c.type) {
+                switch (typeMap.at(c.position).value) {
                     case Box:
                         utility.value += 1;
                         break;
@@ -894,7 +900,7 @@ class Player {
 //                    .filter(t -> Cell.PASSABLE_SUBTYPES.contains(t))
 //                    .count();
         }
-        if (Cell.BONUS_SUBTYPES.contains(cell.type)) {
+        if (Cell.BONUS_SUBTYPES.contains(cellType)) {
             if (!alreadyDestroyedObjects.contains(cell)) {
                 if (willBeDestroyedObjects.contains(cell)) {
                     utility.value += 1; // danger
@@ -912,6 +918,7 @@ class Player {
             final Position startPosition,
             final Set<Cell> alreadyDestroyedObjects,
             final Set<Cell> willBeDestroyedObjects,
+            final TypeMap typeMap,
             final IntegerMap explosionMap,
             final IntegerMap utilityMap,
             final PathMap pathMap,
@@ -937,7 +944,7 @@ class Player {
             final PathParameter currentPathParameter = pathMap.at(currentCell.position);
             final BooleanParameter currentCellUtilityCalculated = utilityCalculated.at(currentCell.position);
             if (!currentCellUtilityCalculated.value) {
-                calculateUtilityForCell(currentCell, alreadyDestroyedObjects, willBeDestroyedObjects, utilityMap);
+                calculateUtilityForCell(currentCell, typeMap, alreadyDestroyedObjects, willBeDestroyedObjects, utilityMap);
                 System.err.println("Utility = " + utilityMap.at(currentCell.position).value);
             }
 
@@ -945,7 +952,7 @@ class Player {
             pathCalculated.at(currentCell.position).value = true;
 
             // add adjacent cells to queue
-            final List<Position> adjacentPositions = generateAdjacentPositions(currentCell.position, null);
+            final List<Position> adjacentPositions = generateAdjacentPositions(currentCell.position, null, typeMap);
             System.err.println("Check adjacent positions");
             adjacentPositions
                     .forEach(p -> {
@@ -957,7 +964,7 @@ class Player {
                         }
                         final PathParameter adjacentPathParameter = pathMap.at(p);
                         final int explosionTime = explosionMap.at(p).value;
-                        if (Cell.PASSABLE_SUBTYPES.contains(adjacentCell.type)
+                        if (Cell.PASSABLE_SUBTYPES.contains(typeMap.at(p).value)
                                 || alreadyDestroyedObjects.contains(adjacentCell)
                                 ) {
                             final int newDistance = currentPathParameter.distance + 1;
@@ -997,11 +1004,11 @@ class Player {
         System.err.println("===========================================");
     }
 
-    void calculateExplosionMap(final List<Bomb> bombs, final IntegerMap explosionMap) {
+    void calculateExplosionMap(final List<Bomb> bombs, final TypeMap typeMap, final IntegerMap explosionMap) {
         final Set<Cell> destroyedObjects = new HashSet<>();
         bombs.stream()
                 .sorted((o1, o2) -> o1.timer - o2.timer)
-                .forEach(b -> calculateExplosionMapForBomb(b, destroyedObjects, explosionMap));
+                .forEach(b -> calculateExplosionMapForBomb(b, destroyedObjects, typeMap, explosionMap));
     }
 
     void checkExplosionWaveFromBomb(
@@ -1020,6 +1027,7 @@ class Player {
     Set<Cell> calculateDestroyedObjects(
             final Position bombPosition,
             final int explosionRange,
+            final TypeMap typeMap,
             final EnumSet<Cell.Type> filter,
             final Set<Cell> willBeDestroyedObjects
     ) {
@@ -1042,10 +1050,11 @@ class Player {
                     break; // end of map
                 }
                 final Cell cell = world.grid.cells[pos.x][pos.y];
-                if (filter.contains(cell.type) && !willBeDestroyedObjects.contains(cell)) {
+                final Cell.Type cellType = typeMap.at(pos).value;
+                if (filter.contains(cellType) && !willBeDestroyedObjects.contains(cell)) {
                     destroyedObjects.add(cell);
                 }
-                if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
+                if (Cell.EXPLOSION_STOPPERS.contains(cellType)) {
                     break;
                 }
             }
@@ -1053,7 +1062,11 @@ class Player {
         return destroyedObjects;
     }
 
-    void calculateExplosionMapForBomb(final Bomb bomb, final Set<Cell> destroyedObjects, final IntegerMap explosionMap) {
+    void calculateExplosionMapForBomb(
+            final Bomb bomb,
+            final Set<Cell> destroyedObjects,
+            final TypeMap typeMap,
+            final IntegerMap explosionMap) {
         checkExplosionWaveFromBomb(bomb, bomb.position, explosionMap);
         final List<Position> directions = new ArrayList<>(4);
         directions.add(new Position(1, 0));
@@ -1070,9 +1083,10 @@ class Player {
                     break; // end of map
                 }
                 final Cell cell = world.grid.cells[pos.x][pos.y];
+                final Cell.Type cellType = typeMap.at(pos).value;
                 checkExplosionWaveFromBomb(bomb, cell.position, explosionMap);
-                if (Cell.EXPLOSION_STOPPERS.contains(cell.type)) {
-                    if (Cell.DESTROYABLE_OBJECTS.contains(cell.type) && !destroyedObjects.contains(cell)) {
+                if (Cell.EXPLOSION_STOPPERS.contains(cellType)) {
+                    if (Cell.DESTROYABLE_OBJECTS.contains(cellType) && !destroyedObjects.contains(cell)) {
                         System.err.println("Destroyed: " + cell);
                         destroyedObjects.add(cell);
                     }
@@ -1090,8 +1104,8 @@ class Player {
                 .orElse(null);
     }
 
-    void checkExplosionsAndDodge(final Position playerPos, final IntegerMap safetyMap) {
-        final List<Position> adjacentPositions = generateAdjacentPositions(playerPos, Cell.PASSABLE_SUBTYPES);
+    void checkExplosionsAndDodge(final Position playerPos, final TypeMap typeMap, final IntegerMap safetyMap) {
+        final List<Position> adjacentPositions = generateAdjacentPositions(playerPos, Cell.PASSABLE_SUBTYPES, typeMap);
         final Cell[][] cells = world.grid.cells;
         final Cell playersCell = cells[playerPos.x][playerPos.y];
         final IntegerParameter playerSafety = safetyMap.at(playerPos);
@@ -1132,6 +1146,7 @@ class Player {
     void modelNewBomb(
             final Bomb bomb,
             final Position playerPosition,
+            final TypeMap typeMap,
             final IntegerMap utilityMap,
             final PathMap pathMap,
             final IntegerMap explosionMap,
@@ -1140,20 +1155,20 @@ class Player {
         final List<Bomb> bombs = new ArrayList<>(world.allBombs.size() + 1);
         world.allBombs.forEach(bombs::add);
         bombs.add(bomb);
-        calculateExplosionMap(bombs, explosionMap);
+        calculateExplosionMap(bombs, typeMap, explosionMap);
         final Set<Cell> alreadyDestroyedObjects = new HashSet<>();
         final Set<Cell> willBeDestroyedObjects = new HashSet<>();
         alreadyDestroyedObjects.addAll(
                 world.grid.asList
                         .stream()
-                        .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(c.type))
+                        .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(typeMap.at(c.position).value))
                         .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
                         .collect(Collectors.toSet())
         );
         willBeDestroyedObjects.addAll(
                 world.grid.asList
                         .stream()
-                        .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(c.type))
+                        .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(typeMap.at(c.position).value))
                         .filter(c -> explosionMap.at(c.position).value >= Bomb.ALREADY_EXPLODED)
                         .collect(Collectors.toSet())
         );
@@ -1161,6 +1176,7 @@ class Player {
                 playerPosition,
                 alreadyDestroyedObjects,
                 willBeDestroyedObjects,
+                typeMap,
                 explosionMap,
                 utilityMap,
                 pathMap,
@@ -1168,7 +1184,7 @@ class Player {
         );
     }
 
-    List<Position> generateAdjacentPositions(final Position center, final EnumSet<Cell.Type> filter) {
+    List<Position> generateAdjacentPositions(final Position center, final EnumSet<Cell.Type> filter, final TypeMap typeMap) {
         final List<Position> adjacentPositions = new ArrayList<>(4);
         if (center.x - 1 >= 0) {
             adjacentPositions.add(new Position(center.x - 1, center.y));
@@ -1186,7 +1202,7 @@ class Player {
             return adjacentPositions;
         } else {
             return adjacentPositions.stream()
-                    .filter(p -> filter.contains(world.grid.cells[p.x][p.y].type))
+                    .filter(p -> filter.contains(typeMap.at(p).value))
                     .collect(Collectors.toList());
         }
     }
