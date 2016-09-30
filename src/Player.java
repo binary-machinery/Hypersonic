@@ -617,7 +617,7 @@ class Player {
             destroyedObjects.forEach(cell -> ignoredCells.add(cell.position));
             timeCalculator.showTime("Model destroyed objects");
 
-            calculateCellsUtilityAndPathsAndSafetyMap(ignoredCells, explosionMap, utilityMap, pathMap, safetyMap);
+            calculateCellsUtilityAndPathsAndSafetyMap(world.player.position, ignoredCells, explosionMap, utilityMap, pathMap, safetyMap);
             timeCalculator.showTime("Utility, paths and safety");
 
             if (world.planner.isEmpty()) {
@@ -633,6 +633,7 @@ class Player {
                             final IntegerMap safetyMapModel = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
                             modelNewBomb(
                                     world.player.createBomb(world.player.position),
+                                    world.player.position,
                                     ignoredCells,
                                     utilityMapModel,
                                     pathMapModel,
@@ -662,7 +663,7 @@ class Player {
             }
             timeCalculator.showTime("Target search");
 
-            checkExplosionsAndDodge(safetyMap);
+            checkExplosionsAndDodge(world.player.position, safetyMap);
             timeCalculator.showTime("Check explosions and dodge");
 
             System.err.println(world.grid.showUtility(utilityMap));
@@ -815,6 +816,7 @@ class Player {
     }
 
     void calculateCellsUtilityAndPathsAndSafetyMap(
+            final Position startPosition,
             final Set<Position> ignoredCells,
             final IntegerMap explosionMap,
             final IntegerMap utilityMap,
@@ -828,10 +830,10 @@ class Player {
         final BooleanMap utilityCalculated = BooleanMap.createFalseMap(world.grid.width, world.grid.height);
         final BooleanMap pathCalculated = BooleanMap.createFalseMap(world.grid.width, world.grid.height);
         final Cell cells[][] = world.grid.cells;
-        final Cell start = cells[world.player.position.x][world.player.position.y];
-        pathMap.values[start.position.x][start.position.y].distance = 0;
-        safetyMap.values[start.position.x][start.position.y].value = explosionMap.values[start.position.x][start.position.y].value;
-        queue.add(start);
+        final Cell startCell = cells[startPosition.x][startPosition.y];
+        pathMap.values[startCell.position.x][startCell.position.y].distance = 0;
+        safetyMap.values[startCell.position.x][startCell.position.y].value = explosionMap.values[startCell.position.x][startCell.position.y].value;
+        queue.add(startCell);
         while (!queue.isEmpty()) {
             final Cell currentCell = queue.poll();
             final PathParameter currentPathParameter = pathMap.values[currentCell.position.x][currentCell.position.y];
@@ -965,8 +967,7 @@ class Player {
                 .orElse(null);
     }
 
-    void checkExplosionsAndDodge(final IntegerMap safetyMap) {
-        final Position playerPos = world.player.position;
+    void checkExplosionsAndDodge(final Position playerPos, final IntegerMap safetyMap) {
         final List<Position> adjacentPositions = generateAdjacentPositions(playerPos);
         final Cell[][] cells = world.grid.cells;
         final Cell playersCell = cells[playerPos.x][playerPos.y];
@@ -1006,8 +1007,9 @@ class Player {
     }
 
     void modelNewBomb(
-            Bomb bomb,
-            Set<Position> ignoredCells,
+            final Bomb bomb,
+            final Position playerPosition,
+            final Set<Position> ignoredCells,
             final IntegerMap utilityMap,
             final PathMap pathMap,
             final IntegerMap explosionMap,
@@ -1017,7 +1019,7 @@ class Player {
         world.allBombs.forEach(bombs::add);
         bombs.add(bomb);
         calculateExplosionMap(bombs, explosionMap);
-        calculateCellsUtilityAndPathsAndSafetyMap(ignoredCells, explosionMap, utilityMap, pathMap, safetyMap);
+        calculateCellsUtilityAndPathsAndSafetyMap(playerPosition, ignoredCells, explosionMap, utilityMap, pathMap, safetyMap);
     }
 
     List<Position> generateAdjacentPositions(Position center) {
