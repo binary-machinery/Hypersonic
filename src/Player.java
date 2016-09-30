@@ -644,6 +644,7 @@ class Player {
 
             final Set<Cell> alreadyDestroyedObjects = new HashSet<>();
             final Set<Cell> willBeDestroyedObjects = new HashSet<>();
+            // add objects was destroyed this turn
             alreadyDestroyedObjects.addAll(
                     world.grid.asList
                             .stream()
@@ -651,6 +652,7 @@ class Player {
                             .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
                             .collect(Collectors.toSet())
             );
+            // add bobs was destroyed this turn
             alreadyDestroyedObjects.addAll(
                     world.allBombs
                             .stream()
@@ -658,6 +660,24 @@ class Player {
                             .map(b -> world.grid.cells[b.position.x][b.position.y])
                             .collect(Collectors.toSet())
             );
+            // change types for already destroyed objects
+            alreadyDestroyedObjects.forEach(o -> {
+                final TypeParameter type = typeMap.at(o.position);
+                switch (type.value) {
+                    case Bomb:
+                    case Box:
+                    case ExtraBomb:
+                    case ExtraRange:
+                        type.value = Cell.Type.Floor;
+                        break;
+                    case BoxWithExtraBomb:
+                        type.value = Cell.Type.ExtraBomb;
+                        break;
+                    case BoxWithExtraRange:
+                        type.value = Cell.Type.ExtraRange;
+                        break;
+                }
+            });
             willBeDestroyedObjects.addAll(
                     world.grid.asList
                             .stream()
