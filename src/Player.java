@@ -570,11 +570,11 @@ class Player {
 
     void run() {
         // game loop
-//        TimeCalculator timeCalculator = new TimeCalculator();
+        final TimeCalculator timeCalculator = new TimeCalculator();
         while (true) {
-//            timeCalculator.start();
+            timeCalculator.start();
             updateWorldState();
-//            System.err.println("Update world: " + timeCalculator.getTime_ms() + " ms");
+            System.err.println("Update world: " + timeCalculator.getTime_ms() + " ms");
 
             in.nextLine();
 
@@ -584,9 +584,10 @@ class Player {
             final PathMap pathMap = PathMap.createPathMap(world.grid.width, world.grid.height);
             final IntegerMap explosionMap = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
             final IntegerMap safetyMap = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
+            System.err.println("Maps allocation: " + timeCalculator.getTime_ms() + " ms");
 
             calculateExplosionMap(world.allBombs, explosionMap);
-//            System.err.println("Explosion map: " + timeCalculator.getTime_ms() + " ms");
+            System.err.println("Explosion map: " + timeCalculator.getTime_ms() + " ms");
 
             final Set<Position> ignoredCells = new HashSet<>();
             final Set<Cell> destroyedObjects = new HashSet<>();
@@ -602,10 +603,10 @@ class Player {
             }
             world.allBombs.forEach(b -> ignoredCells.add(b.position));
             destroyedObjects.forEach(cell -> ignoredCells.add(cell.position));
-//            System.err.println("Model destroyed objects: " + timeCalculator.getTime_ms() + " ms");
+            System.err.println("Model destroyed objects: " + timeCalculator.getTime_ms() + " ms");
 
             calculateCellsUtilityAndPathsAndSafetyMap(ignoredCells, explosionMap, utilityMap, pathMap, safetyMap);
-//            System.err.println("Utility and paths: " + timeCalculator.getTime_ms() + " ms");
+            System.err.println("Utility, paths and safety: " + timeCalculator.getTime_ms() + " ms");
 
             if (world.planner.isEmpty()) {
                 Cell targetCell = null;
@@ -647,10 +648,11 @@ class Player {
             if (world.planner.isEmpty()) {
                 world.planner.add(new SkipTurn(world.player));
             }
+            System.err.println("Target search: " + timeCalculator.getTime_ms() + " ms");
 
             checkExplosionsAndDodge(safetyMap);
-//            System.err.println("Check explosions and dodge: " + timeCalculator.getTime_ms() + " ms");
-//
+            System.err.println("Check explosions and dodge: " + timeCalculator.getTime_ms() + " ms");
+
             System.err.println(world.grid.showUtility(utilityMap));
             System.err.println(world.grid.showDistanceFromPlayer(pathMap));
             System.err.println(world.grid.showExplosionMap(explosionMap));
