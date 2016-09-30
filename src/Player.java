@@ -353,9 +353,26 @@ class TypeMap {
         }
     }
 
+    private TypeMap(int width, int height, TypeMap other) {
+        values = new TypeParameter[width][height];
+        asList = new ArrayList<>(width * height);
+        for (int x = 0; x < width; ++x) {
+            for (int y = 0; y < height; ++y) {
+                final TypeParameter p = new TypeParameter();
+                p.value = other.values[x][y].value;
+                values[x][y] = p;
+                asList.add(p);
+            }
+        }
+    }
+
     TypeParameter at(Position pos) {
         return values[pos.x][pos.y];
     }
+
+    TypeMap getDeepCopy(int width, int height) {
+        return new TypeMap(width, height, this);
+    };
 
     static TypeMap createTypeMap(int width, int height) {
         return new TypeMap(width, height);
@@ -503,16 +520,22 @@ class PlaceBomb extends Action {
 class PlaceBombAndGoTo extends Action {
 
     private Position target;
+    private Boomer player;
     private boolean done = false;
 
-    PlaceBombAndGoTo(Position target) {
+    PlaceBombAndGoTo(Position target, Boomer player) {
         this.target = target;
+        this.player = player;
     }
 
     @Override
     void execute() {
-        System.out.println("BOMB " + target.x + " " + target.y);
-        done = true;
+        if (player.bombsAvailable > 0) {
+            System.out.println("BOMB " + target.x + " " + target.y);
+            done = true;
+        } else {
+            System.out.println("MOVE " + player.position.x + " " + player.position.y);
+        }
     }
 
     @Override
@@ -645,13 +668,13 @@ class Player {
             final Set<Cell> alreadyDestroyedObjects = new HashSet<>();
             final Set<Cell> willBeDestroyedObjects = new HashSet<>();
             // add objects was destroyed this turn
-            alreadyDestroyedObjects.addAll(
-                    world.grid.asList
-                            .stream()
-                            .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(typeMap.at(c.position).value))
-                            .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
-                            .collect(Collectors.toSet())
-            );
+//            alreadyDestroyedObjects.addAll(
+//                    world.grid.asList
+//                            .stream()
+//                            .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(typeMap.at(c.position).value))
+//                            .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
+//                            .collect(Collectors.toSet())
+//            );
             // add bobs was destroyed this turn
             alreadyDestroyedObjects.addAll(
                     world.allBombs
@@ -698,6 +721,8 @@ class Player {
                     safetyMap
             );
             timeCalculator.showTime("Utility, paths and safety");
+
+            System.err.println(world.grid.showTypes(typeMap));
             System.err.println(world.grid.showUtility(utilityMap));
 
             if (world.planner.isEmpty()) {
@@ -714,6 +739,7 @@ class Player {
                         for (int i = 0; i < adjacentPositions.size(); ++i) {
                             final Position adjacentPosition = adjacentPositions.get(i);
                             System.err.println("Check adjacent position: " + adjacentPosition);
+                            final TypeMap typeMapModel = typeMap.getDeepCopy(world.grid.width, world.grid.height);
                             final IntegerMap utilityMapModel = IntegerMap.createUtilityMap(world.grid.width, world.grid.height);
                             final PathMap pathMapModel = PathMap.createPathMap(world.grid.width, world.grid.height);
                             final IntegerMap explosionMapModel = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
@@ -721,7 +747,7 @@ class Player {
                             modelNewBomb(
                                     world.player.createBomb(targetPosition),
                                     adjacentPosition,
-                                    typeMap,
+                                    typeMapModel,
                                     utilityMapModel,
                                     pathMapModel,
                                     explosionMapModel,
@@ -738,7 +764,7 @@ class Player {
                         if (cellToRetreat != null) {
                             final List<Cell> path = getPathTo(targetCell, pathMap);
                             path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
-                            world.planner.add(new PlaceBombAndGoTo(cellToRetreat.position));
+                            world.planner.add(new PlaceBombAndGoTo(cellToRetreat.position, world.player));
                             break;
                         } else {
                             utilityMap.at(targetPosition).value = 0;
@@ -1176,16 +1202,17 @@ class Player {
         final List<Bomb> bombs = new ArrayList<>(world.allBombs.size() + 1);
         world.allBombs.forEach(bombs::add);
         bombs.add(bomb);
+        typeMap.at(bomb.position).value = Cell.Type.Bomb;
         calculateExplosionMap(bombs, typeMap, explosionMap);
         final Set<Cell> alreadyDestroyedObjects = new HashSet<>();
         final Set<Cell> willBeDestroyedObjects = new HashSet<>();
-        alreadyDestroyedObjects.addAll(
-                world.grid.asList
-                        .stream()
-                        .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(typeMap.at(c.position).value))
-                        .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
-                        .collect(Collectors.toSet())
-        );
+//        alreadyDestroyedObjects.addAll(
+//                world.grid.asList
+//                        .stream()
+//                        .filter(c -> Cell.DESTROYABLE_OBJECTS.contains(typeMap.at(c.position).value))
+//                        .filter(c -> explosionMap.at(c.position).value == Bomb.ALREADY_EXPLODED)
+//                        .collect(Collectors.toSet())
+//        );
         willBeDestroyedObjects.addAll(
                 world.grid.asList
                         .stream()
@@ -1203,6 +1230,7 @@ class Player {
                 pathMap,
                 safetyMap
         );
+        System.err.println(world.grid.showSafetyMap(safetyMap));
     }
 
     List<Position> generateAdjacentPositions(final Position center, final EnumSet<Cell.Type> filter, final TypeMap typeMap) {
