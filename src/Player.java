@@ -717,7 +717,7 @@ class Player {
                 Cell targetCell = null;
                 int modelIterationCount = 5;
                 while (modelIterationCount-- > 0) {
-                    targetCell = findNearestCellWithHighestUtility(4, utilityMap, pathMap);
+                    targetCell = findNearestCellWithHighestUtility(4, utilityMap, pathMap, true);
                     System.err.println("Target cell: " + targetCell);
                     if (targetCell != null) {
                         final Position targetPosition = targetCell.position;
@@ -1157,19 +1157,14 @@ class Player {
         });
     }
 
-    Cell findNearestCellWithHighestUtility(int scanRange, final IntegerMap utilityMap, final PathMap pathMap) {
-//        return world.grid.asList.stream()
-//                .filter(c -> pathMap.at(c.position).distance <= scanRange)
-//                .filter(c -> utilityMap.at(c.position).value != 0)
-//                .max((o1, o2) -> utilityMap.at(o1.position).value - utilityMap.at(o2.position).value)
-//                .orElse(null);
+    Cell findNearestCellWithHighestUtility(int scanRange, final IntegerMap utilityMap, final PathMap pathMap, boolean ignoreZeroUtility) {
         final int maxUtility = world.grid.asList
                 .stream()
                 .filter(c -> pathMap.at(c.position).distance <= scanRange)
                 .mapToInt(c -> utilityMap.at(c.position).value)
                 .max()
                 .orElse(0);
-        if (maxUtility == 0) {
+        if (ignoreZeroUtility && maxUtility == 0) {
             return null;
         }
         return world.grid.asList
