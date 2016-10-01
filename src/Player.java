@@ -1216,7 +1216,7 @@ class Player {
         bombs.add(bomb);
         typeMap.at(bomb.position).value = Cell.Type.Bomb;
         calculateExplosionMap(bombs, typeMap, explosionMap);
-        explosionMap.asList.forEach(c -> c.value -= turnsInFuture);
+        explosionMap.asList.forEach(c -> c.value = Math.max(0, c.value - turnsInFuture));
         final Set<Cell> willBeDestroyedObjects = new HashSet<>();
         willBeDestroyedObjects.addAll(
                 world.grid.asList
