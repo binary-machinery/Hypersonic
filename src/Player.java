@@ -953,19 +953,18 @@ class Player {
                         break;
                 }
             });
-//            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position, Cell.PASSABLE_SUBTYPES, typeMap);
-//            adjacentPositions
-//                    .stream()
-//                    .map(p -> typeMap.at(p).value)
-//                    .filter(t -> Cell.PASSABLE_SUBTYPES.contains(t))
-//                    .findAny()
-//                    .ifPresent(t -> utility.value += 1);
+            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position, Cell.PASSABLE_SUBTYPES, typeMap);
+            utility.value += adjacentPositions
+                    .stream()
+                    .map(p -> typeMap.at(p).value)
+                    .filter(t -> Cell.PASSABLE_SUBTYPES.contains(t))
+                    .count() / 2;
         }
         if (Cell.BONUS_SUBTYPES.contains(cellType)) {
             if (willBeDestroyedObjects.contains(cell)) {
                 utility.value += 1; // danger
             } else {
-                utility.value += 2;
+                utility.value += 3;
             }
 //            final int distanceToBonus = calculateDistance(world.player.position, cell.position);
 //            utility.value = Math.max(6 - distanceToBonus, 0);
@@ -1211,12 +1210,14 @@ class Player {
             final IntegerMap explosionMap,
             final IntegerMap safetyMap
     ) {
+        System.err.println("Model explosion");
+        System.err.println("Distance to target = " + turnsInFuture);
         final List<Bomb> bombs = new ArrayList<>(world.allBombs.size() + 1);
         world.allBombs.forEach(bombs::add);
         bombs.add(bomb);
         typeMap.at(bomb.position).value = Cell.Type.Bomb;
         calculateExplosionMap(bombs, typeMap, explosionMap);
-        explosionMap.asList.forEach(c -> c.value = Math.max(0, c.value - turnsInFuture));
+        explosionMap.asList.forEach(c -> c.value = Math.max(0, c.value - turnsInFuture - 1));
         final Set<Cell> willBeDestroyedObjects = new HashSet<>();
         willBeDestroyedObjects.addAll(
                 world.grid.asList
