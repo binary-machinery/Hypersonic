@@ -736,7 +736,7 @@ class Player {
                             modelNewBomb(
                                     world.player.createBomb(targetPosition),
                                     adjacentPosition,
-                                    distanceToTarget,
+                                    distanceToTarget + 1, // turns to go and one turn to place bomb
                                     typeMapModel,
                                     utilityMapModel,
                                     pathMapModel,
@@ -1229,7 +1229,8 @@ class Player {
             final IntegerMap safetyMap
     ) {
         System.err.println("Model explosion");
-        System.err.println("Distance to target = " + turnsInFuture);
+        System.err.println("Turns in future = " + turnsInFuture);
+        bomb.timer += turnsInFuture;
         final List<Bomb> bombs = new ArrayList<>(world.allBombs.size() + 1);
         world.allBombs.forEach(bombs::add);
         bombs.add(bomb);
