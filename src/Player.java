@@ -457,9 +457,9 @@ class SkipTurn extends Action {
     private boolean done = false;
     private String comment = "";
 
-//    SkipTurn(Boomer player) {
-//        this.player = player;
-//    }
+    SkipTurn(Boomer player) {
+        this.player = player;
+    }
 
     SkipTurn(Boomer player, String comment) {
         this.player = player;
@@ -717,6 +717,7 @@ class Player {
                     System.err.println("Target cell: " + targetCell);
                     if (targetCell != null) {
                         final Position targetPosition = targetCell.position;
+                        final int distanceToTarget = pathMap.at(targetPosition).distance;
                         final List<Position> adjacentPositions = generateAdjacentPositions(targetPosition, Cell.PASSABLE_SUBTYPES, typeMap);
                         int maxSafetyCellCount = 0;
                         Cell cellToRetreat = null;
@@ -731,6 +732,7 @@ class Player {
                             modelNewBomb(
                                     world.player.createBomb(targetPosition),
                                     adjacentPosition,
+                                    distanceToTarget,
                                     typeMapModel,
                                     utilityMapModel,
                                     pathMapModel,
@@ -767,7 +769,7 @@ class Player {
                                 path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
                             }
                         } else {
-                            world.planner.add(new SkipTurn(world.player, "Goodbye cruel world"));
+                            world.planner.add(new SkipTurn(world.player, "Seems i die soon"));
                         }
                         break;
                     }
@@ -1208,6 +1210,7 @@ class Player {
     void modelNewBomb(
             final Bomb bomb,
             final Position playerPosition,
+            final int turnsInFuture,
             final TypeMap typeMap,
             final IntegerMap utilityMap,
             final PathMap pathMap,
@@ -1219,6 +1222,7 @@ class Player {
         bombs.add(bomb);
         typeMap.at(bomb.position).value = Cell.Type.Bomb;
         calculateExplosionMap(bombs, typeMap, explosionMap);
+        explosionMap.asList.forEach(c -> c.value -= turnsInFuture);
         final Set<Cell> willBeDestroyedObjects = new HashSet<>();
         willBeDestroyedObjects.addAll(
                 world.grid.asList
