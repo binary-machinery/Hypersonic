@@ -713,7 +713,8 @@ class Player {
             System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
             System.err.println(world.grid.showSafetyMap(safetyMap));
 
-            final boolean ignoreZeroUtility = world.boxCount > 10;
+//            final boolean ignoreZeroUtility = world.boxCount > 10;
+            final boolean ignoreZeroUtility = true;
 //            if (!ignoreZeroUtility) {
 //                System.err.println("Too few boxes, target enemies");
 //                calculateUtilityForEnemies(world.enemies.values(), world.player.explosionRange, typeMap, utilityMap);
@@ -724,7 +725,7 @@ class Player {
                 while (modelIterationCount-- > 0) {
                     Cell targetCell = null;
                     if (world.player.bombsAvailable > 0) {
-                        int scanCount = 3;
+                        int scanCount = 4;
                         int scanRange = 4;
 
                         while (targetCell == null && scanCount-- > 0) {
