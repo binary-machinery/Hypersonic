@@ -720,15 +720,20 @@ class Player {
 //            }
 
             if (world.planner.isEmpty()) {
-                Cell targetCell = null;
                 int modelIterationCount = 5;
                 while (modelIterationCount-- > 0) {
+                    Cell targetCell = null;
                     if (world.player.bombsAvailable > 0) {
                         int scanCount = 3;
                         int scanRange = 4;
 
                         while (targetCell == null && scanCount-- > 0) {
-                            System.err.println("Search target, scan range = " + scanRange);
+                            System.err.println(
+                                    "Search target, scan range = "
+                                            + scanRange
+                                            + " "
+                                            + (ignoreZeroUtility ? "ignore zero utility" : "check zero utility")
+                            );
                             targetCell = findNearestCellWithHighestUtility(scanRange, utilityMap, pathMap, ignoreZeroUtility);
                             scanRange *= 2;
                         }
