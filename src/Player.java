@@ -675,6 +675,7 @@ class Player {
             in.nextLine();
 
             if (world.changed) {
+                System.err.println("Something changed, clear queue");
                 world.planner.clear();
             } else {
                 world.planner.clearFinished();
@@ -704,7 +705,9 @@ class Player {
             );
             timeCalculator.showTime("Utility, paths and safety");
 
+            System.err.println("Original");
             System.err.println(world.grid.showUtility(utilityMap));
+            System.err.println(world.grid.showSafetyMap(safetyMap));
 
             if (world.planner.isEmpty()) {
                 Cell targetCell = null;
@@ -778,6 +781,7 @@ class Player {
             checkExplosionsAndDodge(world.player.position, typeMap, safetyMap);
             timeCalculator.showTime("Check explosions and dodge");
 
+            System.err.println("Final");
             System.err.println(world.grid.showUtility(utilityMap));
 //            System.err.println(world.grid.showDistanceFromPlayer(pathMap));
 //            System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
@@ -1232,6 +1236,8 @@ class Player {
                 pathMap,
                 safetyMap
         );
+        System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
+        System.err.println(world.grid.showSafetyMap(safetyMap));
     }
 
     List<Position> generateAdjacentPositions(final Position center, final EnumSet<Cell.Type> filter, final TypeMap typeMap) {
