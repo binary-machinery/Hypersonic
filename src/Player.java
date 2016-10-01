@@ -784,7 +784,7 @@ class Player {
             }
             timeCalculator.showTime("Target search");
 
-            checkExplosionsAndDodge(world.player.position, typeMap, safetyMap);
+            checkExplosionsAndDodge(world.player.position, typeMap, pathMap, safetyMap);
             timeCalculator.showTime("Check explosions and dodge");
 
             System.err.println("Final");
@@ -1177,7 +1177,7 @@ class Player {
                 .orElse(null);
     }
 
-    void checkExplosionsAndDodge(final Position playerPos, final TypeMap typeMap, final IntegerMap safetyMap) {
+    void checkExplosionsAndDodge(final Position playerPos, final TypeMap typeMap, final PathMap pathMap, final IntegerMap safetyMap) {
         final List<Position> adjacentPositions = generateAdjacentPositions(playerPos, Cell.PASSABLE_SUBTYPES, typeMap);
         final Cell[][] cells = world.grid.cells;
         final Cell playersCell = cells[playerPos.x][playerPos.y];
@@ -1186,6 +1186,7 @@ class Player {
             System.err.println("Player's position will explode next turn!");
             final Cell dodgeCell = adjacentPositions
                     .stream()
+                    .filter(p -> pathMap.at(p).distance == 1) // get reachable adjacent positions
                     .map(p -> cells[p.x][p.y])
                     .max((o1, o2) -> {
                         int safety1 = safetyMap.at(o1.position).value;
