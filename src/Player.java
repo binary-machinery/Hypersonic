@@ -707,11 +707,11 @@ class Player {
             );
             timeCalculator.showTime("Utility, paths and safety");
 
-            System.err.println("Original");
-            System.err.println(world.grid.showUtility(utilityMap));
-            System.err.println(world.grid.showDistanceFromPlayer(pathMap));
-            System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
-            System.err.println(world.grid.showSafetyMap(safetyMap));
+//            System.err.println("Original");
+//            System.err.println(world.grid.showUtility(utilityMap));
+//            System.err.println(world.grid.showDistanceFromPlayer(pathMap));
+//            System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
+//            System.err.println(world.grid.showSafetyMap(safetyMap));
 
             final boolean ignoreZeroUtility = world.boxCount > 10;
 //            if (!ignoreZeroUtility) {
@@ -724,7 +724,7 @@ class Player {
                 while (modelIterationCount-- > 0) {
                     Cell targetCell = null;
                     if (world.player.bombsAvailable > 0) {
-                        int scanCount = 3;
+                        int scanCount = 4;
                         int scanRange = 4;
 
                         while (targetCell == null && scanCount-- > 0) {
@@ -745,35 +745,42 @@ class Player {
                         final List<Position> adjacentPositions = generateAdjacentPositions(targetPosition, Cell.PASSABLE_SUBTYPES, typeMap);
                         int maxSafetyCellCount = 0;
                         Cell cellToRetreat = null;
-                        for (int i = 0; i < adjacentPositions.size(); ++i) {
-                            final Position adjacentPosition = adjacentPositions.get(i);
-                            System.err.println("Check adjacent position: " + adjacentPosition);
-                            final TypeMap typeMapModel = typeMap.getDeepCopy(world.grid.width, world.grid.height);
-                            final IntegerMap utilityMapModel = IntegerMap.createUtilityMap(world.grid.width, world.grid.height);
-                            final PathMap pathMapModel = PathMap.createPathMap(world.grid.width, world.grid.height);
-                            final IntegerMap explosionMapModel = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
-                            final IntegerMap safetyMapModel = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
-                            final List<Bomb> newBombs = new ArrayList<>(4);
-                            newBombs.add(world.player.createBomb(targetPosition));
-                            world.enemies.values().forEach(e -> newBombs.add(e.createBomb(e.position)));
-                            modelNewBomb(
-                                    newBombs,
-                                    adjacentPosition,
-                                    distanceToTarget + 1, // turns to go and one turn to place bomb
-                                    typeMapModel,
-                                    utilityMapModel,
-                                    pathMapModel,
-                                    explosionMapModel,
-                                    safetyMapModel
-                            );
-                            if (safetyMapModel.at(adjacentPosition).value == Bomb.ALREADY_EXPLODED) {
-                                continue;
-                            }
-                            final int safetyCellCount = getSafetyCellCount(safetyMapModel);
-                            System.err.println("Safety cells: " + safetyCellCount);
-                            if (safetyCellCount > maxSafetyCellCount) {
-                                maxSafetyCellCount = safetyCellCount;
-                                cellToRetreat = world.grid.cells[adjacentPosition.x][adjacentPosition.y];
+                        for (int worstCaseScenarioIndex = 0;
+                             worstCaseScenarioIndex < 2 && cellToRetreat == null;
+                             ++worstCaseScenarioIndex
+                                ) {
+                            for (int i = 0; i < adjacentPositions.size(); ++i) {
+                                final Position adjacentPosition = adjacentPositions.get(i);
+                                System.err.println("Check adjacent position: " + adjacentPosition);
+                                final TypeMap typeMapModel = typeMap.getDeepCopy(world.grid.width, world.grid.height);
+                                final IntegerMap utilityMapModel = IntegerMap.createUtilityMap(world.grid.width, world.grid.height);
+                                final PathMap pathMapModel = PathMap.createPathMap(world.grid.width, world.grid.height);
+                                final IntegerMap explosionMapModel = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
+                                final IntegerMap safetyMapModel = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
+                                final List<Bomb> newBombs = new ArrayList<>(4);
+                                newBombs.add(world.player.createBomb(targetPosition));
+                                if (worstCaseScenarioIndex == 0) {
+                                    world.enemies.values().forEach(e -> newBombs.add(e.createBomb(e.position)));
+                                }
+                                modelNewBomb(
+                                        newBombs,
+                                        adjacentPosition,
+                                        distanceToTarget + 1, // turns to go and one turn to place bomb
+                                        typeMapModel,
+                                        utilityMapModel,
+                                        pathMapModel,
+                                        explosionMapModel,
+                                        safetyMapModel
+                                );
+                                if (safetyMapModel.at(adjacentPosition).value == Bomb.ALREADY_EXPLODED) {
+                                    continue;
+                                }
+                                final int safetyCellCount = getSafetyCellCount(safetyMapModel);
+                                System.err.println("Safety cells: " + safetyCellCount);
+                                if (safetyCellCount > maxSafetyCellCount) {
+                                    maxSafetyCellCount = safetyCellCount;
+                                    cellToRetreat = world.grid.cells[adjacentPosition.x][adjacentPosition.y];
+                                }
                             }
                         }
                         System.err.println("Cell to retreat: " + cellToRetreat);
@@ -1284,8 +1291,8 @@ class Player {
             final IntegerMap explosionMap,
             final IntegerMap safetyMap
     ) {
-        System.err.println("Model explosion");
-        System.err.println("Turns in future = " + turnsInFuture);
+//        System.err.println("Model explosion");
+//        System.err.println("Turns in future = " + turnsInFuture);
         final List<Bomb> bombs = new ArrayList<>(world.allBombs.size() + 1);
         newBombs.forEach(b -> {
             b.timer += turnsInFuture;
@@ -1312,8 +1319,8 @@ class Player {
                 pathMap,
                 safetyMap
         );
-        System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
-        System.err.println(world.grid.showSafetyMap(safetyMap));
+//        System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
+//        System.err.println(world.grid.showSafetyMap(safetyMap));
     }
 
     List<Position> generateAdjacentPositions(final Position center, final EnumSet<Cell.Type> filter, final TypeMap typeMap) {
