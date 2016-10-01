@@ -389,6 +389,11 @@ class World {
     final List<Bomb> enemyBombs = new ArrayList<>();
     final List<Bomb> allBombs = new ArrayList<>();
     final Planner planner = new Planner();
+    int boxCount;
+    int bonusCount;
+    int bombCount;
+    int playersCount;
+    boolean changed;
 }
 
 abstract class Action implements Comparable<Action> {
@@ -590,6 +595,10 @@ class Planner {
         actionsToRemove.forEach(actions::remove);
     }
 
+    void clear() {
+        actions.clear();
+    }
+
     void add(Action action) {
         action.order = orderCounter++;
         actions.add(action);
@@ -660,9 +669,16 @@ class Player {
             updateWorldState(typeMap);
             timeCalculator.showTime("Update world");
 
+            updateObjectCounters(typeMap);
+            timeCalculator.showTime("World counters");
+
             in.nextLine();
 
-            world.planner.clearFinished();
+            if (world.changed) {
+                world.planner.clear();
+            } else {
+                world.planner.clearFinished();
+            }
 
             calculateExplosionMap(world.allBombs, typeMap, explosionMap);
             timeCalculator.showTime("Explosion map");
@@ -862,6 +878,41 @@ class Player {
         world.allBombs.addAll(world.playerBombs);
         world.allBombs.addAll(world.enemyBombs);
         world.allBombs.forEach(b -> typeMap.at(b.position).value = Cell.Type.Bomb);
+    }
+
+    void updateObjectCounters(final TypeMap typeMap) {
+        int bombCounter = 0;
+        int boxCounter = 0;
+        int bonusCounter = 0;
+        for (final Cell cell : world.grid.asList) {
+            switch (typeMap.at(cell.position).value) {
+                case Bomb:
+                    ++bombCounter;
+                    break;
+                case Box:
+                case BoxWithExtraBomb:
+                case BoxWithExtraRange:
+                    ++boxCounter;
+                    break;
+                case ExtraBomb:
+                case ExtraRange:
+                    ++bonusCounter;
+                    break;
+            }
+        }
+        world.changed = false;
+        if (bombCounter != world.bombCount) {
+            world.bombCount = bombCounter;
+            world.changed = true;
+        }
+        if (boxCounter != world.boxCount) {
+            world.boxCount = boxCounter;
+            world.changed = true;
+        }
+        if (bonusCounter != world.bonusCount) {
+            world.bonusCount = bonusCounter;
+            world.changed = true;
+        }
     }
 
     void calculateUtilityForCell(
