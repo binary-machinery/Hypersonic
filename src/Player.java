@@ -1169,6 +1169,9 @@ class Player {
                 .mapToInt(c -> utilityMap.at(c.position).value)
                 .max()
                 .orElse(0);
+        if (maxUtility == 0) {
+            return null;
+        }
         return world.grid.asList
                 .stream()
                 .filter(c -> pathMap.at(c.position).distance <= scanRange)
