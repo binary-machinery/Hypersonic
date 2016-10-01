@@ -669,6 +669,8 @@ class Player {
             updateWorldState(typeMap);
             timeCalculator.showTime("Update world");
 
+            System.err.println("Player position: " + world.player.position);
+
             updateObjectCounters(typeMap);
             timeCalculator.showTime("World counters");
 
@@ -707,6 +709,8 @@ class Player {
 
             System.err.println("Original");
             System.err.println(world.grid.showUtility(utilityMap));
+            System.err.println(world.grid.showDistanceFromPlayer(pathMap));
+            System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
             System.err.println(world.grid.showSafetyMap(safetyMap));
 
             if (world.planner.isEmpty()) {
@@ -939,26 +943,27 @@ class Player {
             );
             utility.value = 0;
             boxes.forEach(c -> {
-                switch (typeMap.at(c.position).value) {
-                    case Box:
-                        utility.value += 1;
-                        break;
-                    case BoxWithExtraBomb:
-                        utility.value += 2;
-                        break;
-                    case BoxWithExtraRange:
-                        utility.value += 2;
-                        break;
-                    default:
-                        break;
-                }
+                ++utility.value;
+//                switch (typeMap.at(c.position).value) {
+//                    case Box:
+//                        utility.value += 1;
+//                        break;
+//                    case BoxWithExtraBomb:
+//                        utility.value += 2;
+//                        break;
+//                    case BoxWithExtraRange:
+//                        utility.value += 2;
+//                        break;
+//                    default:
+//                        break;
+//                }
             });
-            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position, Cell.PASSABLE_SUBTYPES, typeMap);
-            utility.value += adjacentPositions
-                    .stream()
-                    .map(p -> typeMap.at(p).value)
-                    .filter(t -> Cell.PASSABLE_SUBTYPES.contains(t))
-                    .count() / 2;
+//            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position, Cell.PASSABLE_SUBTYPES, typeMap);
+//            utility.value += adjacentPositions
+//                    .stream()
+//                    .map(p -> typeMap.at(p).value)
+//                    .filter(t -> Cell.PASSABLE_SUBTYPES.contains(t))
+//                    .count() / 2;
         }
         if (Cell.BONUS_SUBTYPES.contains(cellType)) {
             if (willBeDestroyedObjects.contains(cell)) {
@@ -1153,10 +1158,22 @@ class Player {
     }
 
     Cell findNearestCellWithHighestUtility(int scanRange, final IntegerMap utilityMap, final PathMap pathMap) {
-        return world.grid.asList.stream()
+//        return world.grid.asList.stream()
+//                .filter(c -> pathMap.at(c.position).distance <= scanRange)
+//                .filter(c -> utilityMap.at(c.position).value != 0)
+//                .max((o1, o2) -> utilityMap.at(o1.position).value - utilityMap.at(o2.position).value)
+//                .orElse(null);
+        final int maxUtility = world.grid.asList
+                .stream()
                 .filter(c -> pathMap.at(c.position).distance <= scanRange)
-                .filter(c -> utilityMap.at(c.position).value != 0)
-                .max((o1, o2) -> utilityMap.at(o1.position).value - utilityMap.at(o2.position).value)
+                .mapToInt(c -> utilityMap.at(c.position).value)
+                .max()
+                .orElse(0);
+        return world.grid.asList
+                .stream()
+                .filter(c -> pathMap.at(c.position).distance <= scanRange)
+                .filter(c -> utilityMap.at(c.position).value == maxUtility)
+                .min((o1, o2) -> pathMap.at(o1.position).distance - pathMap.at(o2.position).distance)
                 .orElse(null);
     }
 
@@ -1217,7 +1234,7 @@ class Player {
         bombs.add(bomb);
         typeMap.at(bomb.position).value = Cell.Type.Bomb;
         calculateExplosionMap(bombs, typeMap, explosionMap);
-        explosionMap.asList.forEach(c -> c.value = Math.max(0, c.value - turnsInFuture - 1));
+        explosionMap.asList.forEach(c -> c.value = Math.max(0, c.value - turnsInFuture));
         final Set<Cell> willBeDestroyedObjects = new HashSet<>();
         willBeDestroyedObjects.addAll(
                 world.grid.asList
