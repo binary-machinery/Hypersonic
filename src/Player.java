@@ -755,7 +755,7 @@ class Player {
                             final IntegerMap safetyMapModel = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
                             final List<Bomb> newBombs = new ArrayList<>(4);
                             newBombs.add(world.player.createBomb(targetPosition));
-                            world.enemies.values().forEach(e -> newBombs.add(e.createBomb(e.position)));
+//                            world.enemies.values().forEach(e -> newBombs.add(e.createBomb(e.position)));
                             modelNewBomb(
                                     newBombs,
                                     adjacentPosition,
