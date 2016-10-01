@@ -713,6 +713,12 @@ class Player {
             System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
             System.err.println(world.grid.showSafetyMap(safetyMap));
 
+            final boolean ignoreZeroUtility = world.boxCount > 10;
+//            if (!ignoreZeroUtility) {
+//                System.err.println("Too few boxes, target enemies");
+//                calculateUtilityForEnemies(world.enemies.values(), world.player.explosionRange, typeMap, utilityMap);
+//            }
+
             if (world.planner.isEmpty()) {
                 Cell targetCell = null;
                 int modelIterationCount = 5;
@@ -720,7 +726,7 @@ class Player {
                     if (world.player.bombsAvailable > 0) {
                         int scanCount = 3;
                         int scanRange = 4;
-                        boolean ignoreZeroUtility = world.boxCount > 10;
+
                         while (targetCell == null && scanCount-- > 0) {
                             System.err.println("Search target, scan range = " + scanRange);
                             targetCell = findNearestCellWithHighestUtility(scanRange, utilityMap, pathMap, ignoreZeroUtility);
@@ -987,6 +993,38 @@ class Player {
 //            utility.value = Math.max(6 - distanceToBonus, 0);
         }
         utility.value = Math.max(0, utility.value);
+    }
+
+    void calculateUtilityForEnemies(
+            final Collection<Boomer> enemies,
+            final int explosionRange,
+            final TypeMap typeMap,
+            final IntegerMap utilityMap
+    ) {
+        final List<Position> directions = new ArrayList<>(4);
+        directions.add(new Position(1, 0));
+        directions.add(new Position(-1, 0));
+        directions.add(new Position(0, 1));
+        directions.add(new Position(0, -1));
+
+        for (final Boomer enemy : enemies) {
+            directions.forEach(dir -> {
+                int explosionRadius = explosionRange - 1;
+                Position pos = enemy.position;
+                while (explosionRadius > 0) {
+                    --explosionRadius;
+                    pos = pos.add(dir);
+                    if ((pos.x < 0) || (pos.y < 0) || (pos.x >= world.grid.width) || (pos.y >= world.grid.height)) {
+                        break; // end of map
+                    }
+                    final Cell.Type cellType = typeMap.at(pos).value;
+                    if (Cell.EXPLOSION_STOPPERS.contains(cellType)) {
+                        break;
+                    }
+                    ++utilityMap.at(pos).value;
+                }
+            });
+        }
     }
 
     void calculateCellsUtilityAndPathsAndSafetyMap(
