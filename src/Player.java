@@ -717,7 +717,16 @@ class Player {
                 Cell targetCell = null;
                 int modelIterationCount = 5;
                 while (modelIterationCount-- > 0) {
-                    targetCell = findNearestCellWithHighestUtility(4, utilityMap, pathMap, true);
+                    if (world.player.bombsAvailable > 0) {
+                        int scanCount = 3;
+                        int scanRange = 4;
+                        boolean ignoreZeroUtility = world.boxCount > 10;
+                        while (targetCell == null && scanCount-- > 0) {
+                            System.err.println("Search target, scan range = " + scanRange);
+                            targetCell = findNearestCellWithHighestUtility(scanRange, utilityMap, pathMap, ignoreZeroUtility);
+                            scanRange *= 2;
+                        }
+                    }
                     System.err.println("Target cell: " + targetCell);
                     if (targetCell != null) {
                         final Position targetPosition = targetCell.position;
@@ -743,6 +752,9 @@ class Player {
                                     explosionMapModel,
                                     safetyMapModel
                             );
+                            if (safetyMapModel.at(adjacentPosition).value == Bomb.ALREADY_EXPLODED) {
+                                continue;
+                            }
                             final int safetyCellCount = getSafetyCellCount(safetyMapModel);
                             System.err.println("Safety cells: " + safetyCellCount);
                             if (safetyCellCount > maxSafetyCellCount) {
