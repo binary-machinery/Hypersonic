@@ -748,8 +748,11 @@ class Player {
                             final PathMap pathMapModel = PathMap.createPathMap(world.grid.width, world.grid.height);
                             final IntegerMap explosionMapModel = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
                             final IntegerMap safetyMapModel = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
+                            final List<Bomb> newBombs = new ArrayList<>(4);
+                            newBombs.add(world.player.createBomb(targetPosition));
+                            world.enemies.values().forEach(e -> newBombs.add(e.createBomb(e.position)));
                             modelNewBomb(
-                                    world.player.createBomb(targetPosition),
+                                    newBombs,
                                     adjacentPosition,
                                     distanceToTarget + 1, // turns to go and one turn to place bomb
                                     typeMapModel,
@@ -1267,7 +1270,7 @@ class Player {
     }
 
     void modelNewBomb(
-            final Bomb bomb,
+            final Collection<Bomb> newBombs,
             final Position playerPosition,
             final int turnsInFuture,
             final TypeMap typeMap,
@@ -1278,11 +1281,13 @@ class Player {
     ) {
         System.err.println("Model explosion");
         System.err.println("Turns in future = " + turnsInFuture);
-        bomb.timer += turnsInFuture;
         final List<Bomb> bombs = new ArrayList<>(world.allBombs.size() + 1);
+        newBombs.forEach(b -> {
+            b.timer += turnsInFuture;
+            bombs.add(b);
+            typeMap.at(b.position).value = Cell.Type.Bomb;
+        });
         world.allBombs.forEach(bombs::add);
-        bombs.add(bomb);
-        typeMap.at(bomb.position).value = Cell.Type.Bomb;
         calculateExplosionMap(bombs, typeMap, explosionMap);
         explosionMap.asList.forEach(c -> c.value = Math.max(0, c.value - turnsInFuture));
         final Set<Cell> willBeDestroyedObjects = new HashSet<>();
