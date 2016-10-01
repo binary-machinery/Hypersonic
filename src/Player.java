@@ -953,19 +953,13 @@ class Player {
                         break;
                 }
             });
-//            if (cell.timerToExplosion != Bomb.NO_EXPLOSION) {
-//                cell.utility -= Math.max(0, 5 - cell.timerToExplosion);
-//            }
-//            final int safety = safetyMap.values[cell.position.x][cell.position.y].value;
-//            if (safety != Bomb.NO_EXPLOSION) {
-//                cell.utility -= Math.max(0, 7 - safety);
-//            }
-//            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position);
-//            cell.utility += (int) adjacentPositions
+//            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position, Cell.PASSABLE_SUBTYPES, typeMap);
+//            adjacentPositions
 //                    .stream()
-//                    .map(p -> world.grid.cells[p.x][p.y].type)
+//                    .map(p -> typeMap.at(p).value)
 //                    .filter(t -> Cell.PASSABLE_SUBTYPES.contains(t))
-//                    .count();
+//                    .findAny()
+//                    .ifPresent(t -> utility.value += 1);
         }
         if (Cell.BONUS_SUBTYPES.contains(cellType)) {
             if (willBeDestroyedObjects.contains(cell)) {
