@@ -388,12 +388,11 @@ class World {
     final List<Bomb> playerBombs = new ArrayList<>();
     final List<Bomb> enemyBombs = new ArrayList<>();
     final List<Bomb> allBombs = new ArrayList<>();
-    final Planner planner = new Planner();
     int boxCount;
     int bonusCount;
     int bombCount;
-    int playersCount;
     boolean changed;
+    boolean playersBombCountChanged = false;
 }
 
 abstract class Action implements Comparable<Action> {
@@ -645,6 +644,7 @@ class Player {
 
     private final Scanner in = new Scanner(System.in);
     private final World world = new World();
+    private final Planner planner = new Planner();
 
     public static void main(String args[]) {
         final Player game = new Player();
@@ -676,11 +676,11 @@ class Player {
 
             in.nextLine();
 
-            if (world.changed) {
+            if (world.changed || world.playersBombCountChanged) {
                 System.err.println("Something changed, clear queue");
-                world.planner.clear();
+                planner.clear();
             } else {
-                world.planner.clearFinished();
+                planner.clearFinished();
             }
 
             calculateExplosionMap(world.allBombs, typeMap, explosionMap);
@@ -720,71 +720,31 @@ class Player {
 //                calculateUtilityForEnemies(world.enemies.values(), world.player.explosionRange, typeMap, utilityMap);
 //            }
 
-            if (world.planner.isEmpty()) {
+            if (planner.isEmpty()) {
                 int modelIterationCount = 5;
                 while (modelIterationCount-- > 0) {
                     Cell targetCell = null;
-                    if (world.player.bombsAvailable > 0) {
-                        int scanCount = 4;
-                        int scanRange = 4;
-
-                        while (targetCell == null && scanCount-- > 0) {
-                            System.err.println(
-                                    "Search target, scan range = "
-                                            + scanRange
-                                            + " "
-                                            + (ignoreZeroUtility ? "ignore zero utility" : "check zero utility")
-                            );
-                            targetCell = findNearestCellWithHighestUtility(scanRange, utilityMap, pathMap, ignoreZeroUtility);
-                            scanRange *= 2;
-                        }
+                    int initialScanRange;
+                    if (world.player.bombsAvailable == 0) {
+                        initialScanRange = 8;
+                    } else if (world.player.bombsAvailable == 1) {
+                        initialScanRange = 4;
+                    } else {
+                        initialScanRange = 2;
                     }
+
+                    targetCell = findTarget(initialScanRange, 5, ignoreZeroUtility, utilityMap, pathMap);
                     System.err.println("Target cell: " + targetCell);
                     if (targetCell != null) {
-                        final Position targetPosition = targetCell.position;
-                        final int distanceToTarget = pathMap.at(targetPosition).distance;
-                        final List<Position> adjacentPositions = generateAdjacentPositions(targetPosition, Cell.PASSABLE_SUBTYPES, typeMap);
-                        int maxSafetyCellCount = 0;
-                        Cell cellToRetreat = null;
-                        for (int i = 0; i < adjacentPositions.size(); ++i) {
-                            final Position adjacentPosition = adjacentPositions.get(i);
-                            System.err.println("Check adjacent position: " + adjacentPosition);
-                            final TypeMap typeMapModel = typeMap.getDeepCopy(world.grid.width, world.grid.height);
-                            final IntegerMap utilityMapModel = IntegerMap.createUtilityMap(world.grid.width, world.grid.height);
-                            final PathMap pathMapModel = PathMap.createPathMap(world.grid.width, world.grid.height);
-                            final IntegerMap explosionMapModel = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
-                            final IntegerMap safetyMapModel = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
-                            final List<Bomb> newBombs = new ArrayList<>(4);
-                            newBombs.add(world.player.createBomb(targetPosition));
-//                            world.enemies.values().forEach(e -> newBombs.add(e.createBomb(e.position)));
-                            modelNewBomb(
-                                    newBombs,
-                                    adjacentPosition,
-                                    distanceToTarget + 1, // turns to go and one turn to place bomb
-                                    typeMapModel,
-                                    utilityMapModel,
-                                    pathMapModel,
-                                    explosionMapModel,
-                                    safetyMapModel
-                            );
-                            if (safetyMapModel.at(adjacentPosition).value == Bomb.ALREADY_EXPLODED) {
-                                continue;
-                            }
-                            final int safetyCellCount = getSafetyCellCount(safetyMapModel);
-                            System.err.println("Safety cells: " + safetyCellCount);
-                            if (safetyCellCount > maxSafetyCellCount) {
-                                maxSafetyCellCount = safetyCellCount;
-                                cellToRetreat = world.grid.cells[adjacentPosition.x][adjacentPosition.y];
-                            }
-                        }
+                        final Cell cellToRetreat = findCellToRetreat(targetCell, typeMap, pathMap);
                         System.err.println("Cell to retreat: " + cellToRetreat);
                         if (cellToRetreat != null) {
                             final List<Cell> path = getPathTo(targetCell, pathMap);
-                            path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
-                            world.planner.add(new PlaceBombAndGoTo(cellToRetreat.position, world.player));
+                            path.forEach(c -> planner.add(new Move(c.position, world.player)));
+                            planner.add(new PlaceBombAndGoTo(cellToRetreat.position, world.player));
                             break;
                         } else {
-                            utilityMap.at(targetPosition).value = 0;
+                            utilityMap.at(targetCell.position).value = 0;
                         }
                     } else {
                         // go to safety point
@@ -795,19 +755,19 @@ class Player {
                             final List<Cell> path = getPathTo(nearestSafetyPoint, pathMap);
                             if (path.isEmpty()) {
                                 System.err.println("Already in safe");
-                                world.planner.add(new SkipTurn(world.player, "Wait in safety"));
+                                planner.add(new SkipTurn(world.player, "Wait in safety"));
                             } else {
-                                path.forEach(c -> world.planner.add(new Move(c.position, world.player)));
+                                path.forEach(c -> planner.add(new Move(c.position, world.player)));
                             }
                         } else {
-                            world.planner.add(new SkipTurn(world.player, "Seems i die soon"));
+                            planner.add(new SkipTurn(world.player, "Seems i die soon"));
                         }
                         break;
                     }
                 }
             }
-            if (world.planner.isEmpty()) {
-                world.planner.add(new SkipTurn(world.player, "wtf"));
+            if (planner.isEmpty()) {
+                planner.add(new SkipTurn(world.player, "wtf"));
             }
             timeCalculator.showTime("Target search");
 
@@ -818,10 +778,10 @@ class Player {
             System.err.println(world.grid.showUtility(utilityMap));
 //            System.err.println(world.grid.showDistanceFromPlayer(pathMap));
 //            System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
-            System.err.println(world.grid.showSafetyMap(safetyMap));
-            System.err.println(world.planner);
+//            System.err.println(world.grid.showSafetyMap(safetyMap));
+            System.err.println(planner);
 
-            world.planner.executeNext();
+            planner.executeNext();
         }
     }
 
@@ -871,6 +831,7 @@ class Player {
                     if (owner == world.player.id) {
                         world.player.position.x = x;
                         world.player.position.y = y;
+                        world.playersBombCountChanged = world.player.bombsAvailable != param1;
                         world.player.bombsAvailable = param1;
                         world.player.explosionRange = param2;
                     } else {
@@ -1004,7 +965,7 @@ class Player {
         }
         if (Cell.BONUS_SUBTYPES.contains(cellType)) {
             if (willBeDestroyedObjects.contains(cell)) {
-                utility.value += 1; // danger
+                utility.value += 0; // danger
             } else {
 //                if (cellType == Cell.Type.ExtraBomb) {
 //                    if (world.player.bombsAvailable + world.playerBombs.size() > 4) {
@@ -1021,8 +982,9 @@ class Player {
 //                        utility.value += 2;
 //                    }
 //                }
-                final int distanceToBonus = pathMap.at(cell.position).distance;
-                utility.value = Math.max(6 - distanceToBonus, 0);
+                utility.value += 2;
+//                final int distanceToBonus = pathMap.at(cell.position).distance;
+//                utility.value += Math.max(6 - distanceToBonus, 0);
             }
         }
         utility.value = Math.max(0, utility.value);
@@ -1284,7 +1246,7 @@ class Player {
             System.err.println("Cell to dodge: " + dodgeCell);
             final Move dodge = new Move(dodgeCell.position, world.player);
             dodge.priority = Action.HIGH_PRIORITY;
-            world.planner.add(dodge);
+            planner.add(dodge);
         }
 //        else {
 //            adjacentPositions
@@ -1294,7 +1256,7 @@ class Player {
 //                    .ifPresent(c -> {
 //                        final SkipTurn skip = new SkipTurn(world.player, "Dodge explosion");
 //                        skip.priority = Action.HIGH_PRIORITY;
-//                        world.planner.add(skip);
+//                        planner.add(skip);
 //                    });
 //        }
     }
@@ -1309,8 +1271,8 @@ class Player {
             final IntegerMap explosionMap,
             final IntegerMap safetyMap
     ) {
-        System.err.println("Model explosion");
-        System.err.println("Turns in future = " + turnsInFuture);
+//        System.err.println("Model explosion");
+//        System.err.println("Turns in future = " + turnsInFuture);
         final List<Bomb> bombs = new ArrayList<>(world.allBombs.size() + 1);
         newBombs.forEach(b -> {
             b.timer += turnsInFuture;
@@ -1337,8 +1299,8 @@ class Player {
                 pathMap,
                 safetyMap
         );
-        System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
-        System.err.println(world.grid.showSafetyMap(safetyMap));
+//        System.err.println(world.grid.showExplosionMap(explosionMap, typeMap));
+//        System.err.println(world.grid.showSafetyMap(safetyMap));
     }
 
     List<Position> generateAdjacentPositions(final Position center, final EnumSet<Cell.Type> filter, final TypeMap typeMap) {
@@ -1395,5 +1357,67 @@ class Player {
                 .filter(c -> safetyMap.at(c.position).value == Bomb.NO_EXPLOSION)
                 .min((o1, o2) -> pathMap.at(o1.position).distance - pathMap.at(o2.position).distance)
                 .orElse(null);
+    }
+
+    Cell findTarget(
+            final int initialScanRange,
+            final int scanDepth,
+            final boolean ignoreZeroUtility,
+            final IntegerMap utilityMap,
+            final PathMap pathMap) {
+        Cell targetCell = null;
+        int scanCount = scanDepth;
+        int scanRange = initialScanRange;
+
+        while (targetCell == null && scanCount-- > 0) {
+            System.err.println(
+                    "Search target, scan range = "
+                            + scanRange
+                            + " "
+                            + (ignoreZeroUtility ? "ignore zero utility" : "check zero utility")
+            );
+            targetCell = findNearestCellWithHighestUtility(scanRange, utilityMap, pathMap, ignoreZeroUtility);
+            scanRange *= 2;
+        }
+        return targetCell;
+    }
+
+    Cell findCellToRetreat(final Cell bombTarget, final TypeMap typeMap, final PathMap pathMap) {
+        final Position targetPosition = bombTarget.position;
+        final int distanceToTarget = pathMap.at(targetPosition).distance;
+        final List<Position> adjacentPositions = generateAdjacentPositions(targetPosition, Cell.PASSABLE_SUBTYPES, typeMap);
+        int maxSafetyCellCount = 0;
+        Cell cellToRetreat = null;
+        for (int i = 0; i < adjacentPositions.size(); ++i) {
+            final Position adjacentPosition = adjacentPositions.get(i);
+            System.err.println("Check adjacent position: " + adjacentPosition);
+            final TypeMap typeMapModel = typeMap.getDeepCopy(world.grid.width, world.grid.height);
+            final IntegerMap utilityMapModel = IntegerMap.createUtilityMap(world.grid.width, world.grid.height);
+            final PathMap pathMapModel = PathMap.createPathMap(world.grid.width, world.grid.height);
+            final IntegerMap explosionMapModel = IntegerMap.createExplosionMap(world.grid.width, world.grid.height);
+            final IntegerMap safetyMapModel = IntegerMap.createSafetyMap(world.grid.width, world.grid.height);
+            final List<Bomb> newBombs = new ArrayList<>(4);
+            newBombs.add(world.player.createBomb(targetPosition));
+            modelNewBomb(
+                    newBombs,
+                    adjacentPosition,
+                    distanceToTarget + 1, // turns to go and one turn to place bomb
+                    typeMapModel,
+                    utilityMapModel,
+                    pathMapModel,
+                    explosionMapModel,
+                    safetyMapModel
+            );
+            if (safetyMapModel.at(adjacentPosition).value == Bomb.ALREADY_EXPLODED) {
+                continue;
+            }
+            final int safetyCellCount = getSafetyCellCount(safetyMapModel);
+            System.err.println("Safety cells: " + safetyCellCount);
+            if (safetyCellCount > maxSafetyCellCount) {
+                maxSafetyCellCount = safetyCellCount;
+                cellToRetreat = world.grid.cells[adjacentPosition.x][adjacentPosition.y];
+            }
+        }
+        return cellToRetreat;
     }
 }
