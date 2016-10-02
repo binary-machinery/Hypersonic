@@ -736,16 +736,21 @@ class Player {
                     targetCell = findTarget(initialScanRange, 5, ignoreZeroUtility, utilityMap, pathMap);
                     System.err.println("Target cell: " + targetCell);
                     if (targetCell != null) {
-                        final Cell cellToRetreat = findCellToRetreat(targetCell, typeMap, pathMap);
-                        System.err.println("Cell to retreat: " + cellToRetreat);
-                        if (cellToRetreat != null) {
-                            final List<Cell> path = getPathTo(targetCell, pathMap);
-                            path.forEach(c -> planner.add(new Move(c.position, world.player)));
-                            planner.add(new PlaceBombAndGoTo(cellToRetreat.position, world.player));
-                            break;
-                        } else {
-                            utilityMap.at(targetCell.position).value = 0;
-                        }
+//                        if (Cell.BONUS_SUBTYPES.contains(typeMap.at(targetCell.position).value)) {
+//                            final List<Cell> path = getPathTo(targetCell, pathMap);
+//                            path.forEach(c -> planner.add(new Move(c.position, world.player)));
+//                        } else {
+                            final Cell cellToRetreat = findCellToRetreat(targetCell, typeMap, pathMap);
+                            System.err.println("Cell to retreat: " + cellToRetreat);
+                            if (cellToRetreat != null) {
+                                final List<Cell> path = getPathTo(targetCell, pathMap);
+                                path.forEach(c -> planner.add(new Move(c.position, world.player)));
+                                planner.add(new PlaceBombAndGoTo(cellToRetreat.position, world.player));
+                                break;
+                            } else {
+                                utilityMap.at(targetCell.position).value = 0;
+                            }
+//                        }
                     } else {
                         // go to safety point
                         System.err.println("No target found, go to safety point");
@@ -964,9 +969,9 @@ class Player {
 //                    .count() / 2;
         }
         if (Cell.BONUS_SUBTYPES.contains(cellType)) {
-            if (willBeDestroyedObjects.contains(cell)) {
-                utility.value += 0; // danger
-            } else {
+//            if (willBeDestroyedObjects.contains(cell)) {
+//                utility.value += 0; // danger
+//            } else {
 //                if (cellType == Cell.Type.ExtraBomb) {
 //                    if (world.player.bombsAvailable + world.playerBombs.size() > 4) {
 //                        utility.value += 1;
@@ -982,11 +987,18 @@ class Player {
 //                        utility.value += 2;
 //                    }
 //                }
-                utility.value += 2;
+            utility.value += 2;
+            if (cellType == Cell.Type.ExtraBomb) {
+                utility.value += 1;
+            }
+            if (world.player.bombsAvailable == 0) {
+                utility.value += 1;
+            }
 //                final int distanceToBonus = pathMap.at(cell.position).distance;
 //                utility.value += Math.max(6 - distanceToBonus, 0);
-            }
+//            }
         }
+        utility.value -= pathMap.at(cell.position).distance / 2;
         utility.value = Math.max(0, utility.value);
     }
 
