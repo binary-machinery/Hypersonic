@@ -740,16 +740,16 @@ class Player {
 //                            final List<Cell> path = getPathTo(targetCell, pathMap);
 //                            path.forEach(c -> planner.add(new Move(c.position, world.player)));
 //                        } else {
-                            final Cell cellToRetreat = findCellToRetreat(targetCell, typeMap, pathMap);
-                            System.err.println("Cell to retreat: " + cellToRetreat);
-                            if (cellToRetreat != null) {
-                                final List<Cell> path = getPathTo(targetCell, pathMap);
-                                path.forEach(c -> planner.add(new Move(c.position, world.player)));
-                                planner.add(new PlaceBombAndGoTo(cellToRetreat.position, world.player));
-                                break;
-                            } else {
-                                utilityMap.at(targetCell.position).value = 0;
-                            }
+                        final Cell cellToRetreat = findCellToRetreat(targetCell, typeMap, pathMap);
+                        System.err.println("Cell to retreat: " + cellToRetreat);
+                        if (cellToRetreat != null) {
+                            final List<Cell> path = getPathTo(targetCell, pathMap);
+                            path.forEach(c -> planner.add(new Move(c.position, world.player)));
+                            planner.add(new PlaceBombAndGoTo(cellToRetreat.position, world.player));
+                            break;
+                        } else {
+                            utilityMap.at(targetCell.position).value = 0;
+                        }
 //                        }
                     } else {
                         // go to safety point
