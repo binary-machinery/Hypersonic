@@ -956,7 +956,8 @@ class Player {
             final Cell cell,
             final TypeMap typeMap,
             final Set<Cell> willBeDestroyedObjects,
-            final IntegerMap utilityMap
+            final IntegerMap utilityMap,
+            final PathMap pathMap
     ) {
         final IntegerParameter utility = utilityMap.at(cell.position);
         final Cell.Type cellType = typeMap.at(cell.position).value;
@@ -970,20 +971,29 @@ class Player {
             );
             utility.value = 0;
             boxes.forEach(c -> {
-                ++utility.value;
-//                switch (typeMap.at(c.position).value) {
-//                    case Box:
-//                        utility.value += 1;
-//                        break;
-//                    case BoxWithExtraBomb:
-//                        utility.value += 2;
-//                        break;
-//                    case BoxWithExtraRange:
-//                        utility.value += 2;
-//                        break;
-//                    default:
-//                        break;
-//                }
+                switch (typeMap.at(c.position).value) {
+                    case Box:
+                        utility.value += 1;
+                        break;
+                    case BoxWithExtraBomb:
+                        if (world.player.bombsAvailable + world.playerBombs.size() > 5) {
+                            utility.value += 1;
+                        } else if (world.player.bombsAvailable + world.playerBombs.size() > 3) {
+                            utility.value += 2;
+                        } else {
+                            utility.value += 3;
+                        }
+                        break;
+                    case BoxWithExtraRange:
+                        if (world.player.explosionRange > 5) {
+                            utility.value += 1;
+                        } else {
+                            utility.value += 2;
+                        }
+                        break;
+                    default:
+                        break;
+                }
             });
 //            final List<Position> adjacentPositions = generateAdjacentPositions(cell.position, Cell.PASSABLE_SUBTYPES, typeMap);
 //            utility.value += adjacentPositions
@@ -996,10 +1006,24 @@ class Player {
             if (willBeDestroyedObjects.contains(cell)) {
                 utility.value += 1; // danger
             } else {
-                utility.value += 3;
+//                if (cellType == Cell.Type.ExtraBomb) {
+//                    if (world.player.bombsAvailable + world.playerBombs.size() > 4) {
+//                        utility.value += 1;
+//                    } else if (world.player.bombsAvailable + world.playerBombs.size() > 2) {
+//                        utility.value += 2;
+//                    } else {
+//                        utility.value += 3;
+//                    }
+//                } else {
+//                    if (world.player.explosionRange > 5) {
+//                        utility.value += 1;
+//                    } else {
+//                        utility.value += 2;
+//                    }
+//                }
+                final int distanceToBonus = pathMap.at(cell.position).distance;
+                utility.value = Math.max(6 - distanceToBonus, 0);
             }
-//            final int distanceToBonus = calculateDistance(world.player.position, cell.position);
-//            utility.value = Math.max(6 - distanceToBonus, 0);
         }
         utility.value = Math.max(0, utility.value);
     }
@@ -1065,7 +1089,7 @@ class Player {
             final PathParameter currentPathParameter = pathMap.at(currentCell.position);
             final BooleanParameter currentCellUtilityCalculated = utilityCalculated.at(currentCell.position);
             if (!currentCellUtilityCalculated.value) {
-                calculateUtilityForCell(currentCell, typeMap, willBeDestroyedObjects, utilityMap);
+                calculateUtilityForCell(currentCell, typeMap, willBeDestroyedObjects, utilityMap, pathMap);
 //                System.err.println("Utility = " + utilityMap.at(currentCell.position).value);
             }
 
